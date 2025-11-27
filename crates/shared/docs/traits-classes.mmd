@@ -1,0 +1,92 @@
+classDiagram
+    %% Core Traits
+    class SecurityValidator {
+        <<interface>>
+        +validate_command(Command~Unvalidated~) Result~Command~Validated~, DomainError~
+        +get_security_level() SecurityLevel
+        +can_handle_command(&Command~Unvalidated~) bool
+    }
+
+    class CommandAnalyzer {
+        <<interface>>
+        +analyze_command(Command~Validated~) Result~Command~Analyzed~, DomainError~
+        +get_suggestions(&Command~Analyzed~) Result~Vec~CommandSuggestion~, DomainError~
+        +get_model_info() ModelInfo
+    }
+
+    class TrainingEngine {
+        <<interface>>
+        +train_model(TrainingData, TrainingConfig) Result~TrainedModel, DomainError~
+        +evaluate_model(&TrainedModel, &TrainingData) Result~ModelEvaluation, DomainError~
+        +deploy_model(TrainedModel) Result~DeployedModel, DomainError~
+    }
+
+    class FileOperations {
+        <<interface>>
+        +read_file(ValidatedPath) Result~FileContent, DomainError~
+        +write_file(ValidatedPath, FileContent) Result~(), DomainError~
+        +list_directory(ValidatedPath) Result~Vec~FileInfo~, DomainError~
+        +create_validated_path(&str) Result~ValidatedPath, DomainError~
+    }
+
+    class PlatformAdapter {
+        <<interface>>
+        +get_system_info() Result~SystemInfo, DomainError~
+        +execute_command(Command~SafeToExecute~) Result~CommandOutput, DomainError~
+        +get_shell_type() ShellType
+        +get_user_home() Result~ValidatedPath, DomainError~
+    }
+
+    %% Data Transfer Objects
+    class CommandSuggestion {
+        +String command
+        +String explanation
+        +f32 confidence
+        +SecurityLevel safety_level
+    }
+
+    class ModelInfo {
+        +String name
+        +String version
+        +Vec~String~ capabilities
+        +u32 max_tokens
+    }
+
+    class TrainingData {
+        +Vec~HistoricalCommand~ commands
+        +Vec~UserFeedback~ user_feedback
+        +TrainingContext context
+    }
+
+    class TrainedModel {
+        +String name
+        +String version
+        +f32 accuracy
+        +ModelMetadata metadata
+    }
+
+    class FileContent {
+        +Vec~u8~ data
+        +String encoding
+        +u64 size
+    }
+
+    class CommandOutput {
+        +String stdout
+        +String stderr
+        +i32 exit_code
+        +Duration duration
+    }
+
+    %% Relationships
+    SecurityValidator --> Command~Unvalidated~
+    SecurityValidator --> Command~Validated~
+    CommandAnalyzer --> Command~Validated~
+    CommandAnalyzer --> Command~Analyzed~
+    PlatformAdapter --> Command~SafeToExecute~
+    FileOperations --> ValidatedPath
+    FileOperations --> FileContent
+    TrainingEngine --> TrainingData
+    TrainingEngine --> TrainedModel
+    CommandAnalyzer --> CommandSuggestion
+    CommandAnalyzer --> ModelInfo

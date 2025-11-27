@@ -1,0 +1,21 @@
+{# crates/web-ui/templates/base.html #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZSH Ollama Terminal</title>
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <script src="https://unpkg.com/hyperscript.org@0.9.11"></script>
+    <style>
+        .command-input { border: 1px solid #ccc; padding: 8px; border-radius: 4px; }
+        .suggestion { background: #f0f8ff; padding: 8px; margin: 4px 0; border-radius: 4px; }
+        .security-warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 8px; margin: 4px 0; }
+    </style>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+    <div class="container">
+        {% block content %}{% endblock content %}
+    </div>
+</body>
+</html>

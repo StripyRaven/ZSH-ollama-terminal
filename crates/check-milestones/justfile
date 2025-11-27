@@ -1,0 +1,320 @@
+# zsh-ollama-terminal/crates/check-milestones/Justfile
+#
+# Justfile для системы Check Milestones
+# Упрощает запуск всех команд и скриптов качества
+
+# Переменные окружения
+set shell := ["bash", "-c"]
+rustflags := "--quiet"
+verbose_flag := "--verbose"
+output_json := "--output json"
+output_markdown := "--output markdown"
+
+# ИСПРАВЛЯЕМ команду quick-check (используем флаги правильно)
+quick-check:
+    cargo check {{ rustflags }} && \
+    cargo test --quiet && \
+    cargo run --bin check-milestones -- check-milestone1 {{ rustflags }}
+
+# Основные команды
+default: check-all
+
+## 🚀 Проверка отдельных вех
+check-milestone-1:
+    cargo run --bin check-milestones -- check-milestone1 {{ rustflags }}
+
+check-milestone-2:
+    cargo run --bin check-milestones -- check-milestone2 {{ rustflags }}
+
+check-milestone-3:
+    cargo run --bin check-milestones -- check-milestone3 {{ rustflags }}
+
+check-milestone-4:
+    cargo run --bin check-milestones -- check-milestone4 {{ rustflags }}
+
+check-milestone-5:
+    cargo run --bin check-milestones -- check-milestone5 {{ rustflags }}
+
+check-milestone-6:
+    cargo run --bin check-milestones -- check-milestone6 {{ rustflags }}
+
+# Проверка вехи с подробным выводом
+# команда отрабатывает правильно тест не проходит
+check-milestone1-verbose:
+    cargo run --features="cli" {{ verbose_flag }} -- check-milestone1
+
+check-milestone-2-verbose:
+    cargo run --bin check-milestones -- check-milestone-2 {{ verbose_flag }}
+
+check-milestone-3-verbose:
+    cargo run --bin check-milestones -- check-milestone-3 {{ verbose_flag }}
+
+check-milestone-4-verbose:
+    cargo run --bin check-milestones -- check-milestone-4 {{ verbose_flag }}
+
+check-milestone-5-verbose:
+    cargo run --bin check-milestones -- check-milestone-5 {{ verbose_flag }}
+
+check-milestone-6-verbose:
+    cargo run --bin check-milestones -- check-milestone-6 {{ verbose_flag }}
+
+## 📊 Команды отчетов
+# Проверить все вехи
+check-all:
+    cargo run --bin check-milestones -- check-all {{ rustflags }}
+
+check-all-verbose:
+    cargo run --bin check-milestones -- check-all {{ verbose_flag }}
+
+# Отчет о прогрессе
+progress-report:
+    cargo run --bin check-milestones -- progress-report {{ rustflags }}
+
+progress-report-json:
+    cargo run --bin check-milestones -- progress-report {{ output_json }}
+
+progress-report-markdown:
+    cargo run --bin check-milestones -- progress-report {{ output_markdown }}
+
+# Сохранить отчет в файл
+progress-report-save:
+    cargo run --bin check-milestones -- progress-report {{ output_markdown }} > progress_report.md && \
+    echo "✅ Отчет сохранен в progress_report.md"
+
+## 🔍 Информационные команды
+# Информация о всех вехах
+info:
+    cargo run --bin check-milestones -- info {{ rustflags }}
+
+info-verbose:
+    cargo run --bin check-milestones -- info {{ verbose_flag }}
+
+# Информация о конкретной вехе
+info-1:
+    cargo run --bin check-milestones -- info 1 {{ rustflags }}
+
+info-2:
+    cargo run --bin check-milestones -- info 2 {{ rustflags }}
+
+info-3:
+    cargo run --bin check-milestones -- info 3 {{ rustflags }}
+
+info-4:
+    cargo run --bin check-milestones -- info 4 {{ rustflags }}
+
+info-5:
+    cargo run --bin check-milestones -- info 5 {{ rustflags }}
+
+info-6:
+    cargo run --bin check-milestones -- info 6 {{ rustflags }}
+
+# Детальная информация в JSON
+info-json:
+    cargo run --bin check-milestones -- info {{ output_json }}
+
+info-1-json:
+    cargo run --bin check-milestones -- info 1 {{ output_json }}
+
+info-2-json:
+    cargo run --bin check-milestones -- info 2 {{ output_json }}
+
+## 🛠️ Команды разработки
+# Запуск тестов
+test:
+    cargo test {{ rustflags }}
+
+test-verbose:
+    cargo test -- --nocapture
+
+# Проверка компиляции
+check:
+    cargo check {{ rustflags }}
+
+# Форматирование кода
+fmt:
+    cargo fmt
+
+fmt-check:
+    cargo fmt -- --check
+
+# Clippy проверки
+clippy:
+    cargo clippy -- -D warnings
+
+clippy-verbose:
+    cargo clippy -- -D warnings -W clippy::all
+
+# Генерация документации
+doc:
+    cargo doc --no-deps --document-private-items
+
+doc-open:
+    cargo doc --no-deps --document-private-items --open
+
+# Сборка release версии
+build:
+    cargo build --release {{ rustflags }}
+
+build-dev:
+    cargo build {{ rustflags }}
+
+## 📈 CI/CD команды
+# Команда для GitHub Actions
+ci-check-milestone-1:
+    cargo run --bin check-milestones -- check-milestone-1
+
+ci-check-milestone-2:
+    cargo run --bin check-milestones -- check-milestone-2
+
+ci-check-all:
+    cargo run --bin check-milestones -- check-all
+
+ci-progress-report:
+    cargo run --bin check-milestones -- progress-report {{ output_markdown }} > progress_report.md
+
+## 📁 Управление отчетами
+# Создать директорию для отчетов
+init-reports:
+    mkdir -p reports
+
+# Ежедневный отчет
+daily-report:
+    mkdir -p reports && \
+    cargo run --bin check-milestones -- progress-report {{ output_markdown }} > "reports/progress_$(date +%Y-%m-%d).md" && \
+    echo "✅ Ежедневный отчет создан: reports/progress_$(date +%Y-%m-%d).md"
+
+# Еженедельный отчет
+weekly-report:
+    mkdir -p reports && \
+    cargo run --bin check-milestones -- progress-report {{ output_markdown }} > "reports/progress_week_$(date +%Y-%U).md" && \
+    echo "✅ Еженедельный отчет создан: reports/progress_week_$(date +%Y-%U).md"
+
+# Показать последний отчет
+show-last-report:
+    ls -1t reports/*.md | head -1 | xargs cat
+
+# Очистить старые отчеты (старше 30 дней)
+clean-reports:
+    find reports -name "*.md" -mtime +30 -delete && \
+    echo "✅ Старые отчеты удалены"
+
+## 🔄 Рабочие процессы
+# Полный рабочий процесс для вехи 1
+workflow-milestone-1:
+    just info-1 && \
+    just check-milestone-1-verbose && \
+    just progress-report-save
+
+workflow-milestone-2:
+    just info-2 && \
+    just check-milestone-2-verbose && \
+    just progress-report-save
+
+# Полный цикл проверки качества
+quality-workflow:
+    just check && \
+    just test && \
+    just clippy && \
+    just fmt-check && \
+    just check-all-verbose
+
+# Подготовка к релизу
+release-prep:
+    just quality-workflow && \
+    just build && \
+    just doc && \
+    just progress-report-markdown
+
+## 🆕 Команды для новых разработчиков
+# Первоначальная настройка
+setup:
+    cargo check && \
+    just test && \
+    just info && \
+    just progress-report
+
+# Быстрый старт
+quickstart:
+    @echo "🚀 Быстрый старт с Check Milestones:" && \
+    echo "1. just setup          - Первоначальная настройка" && \
+    echo "2. just info           - Информация о вехах" && \
+    echo "3. just check-milestone-1 - Проверить веху 1" && \
+    echo "4. just progress-report - Отчет о прогрессе" && \
+    echo "5. just workflow-milestone-1 - Полный рабочий процесс"
+
+## 📋 Справка
+# Показать все команды
+list:
+    @just --list --unsorted
+
+# Показать справку
+help:
+    @echo "🎯 Check Milestones - Система Quality Gates" && \
+    echo "" && \
+    echo "📖 Основные команды:" && \
+    echo "  just check-milestone-N    - Проверить веху N (1-6)" && \
+    echo "  just check-all            - Проверить все вехи" && \
+    echo "  just progress-report      - Отчет о прогрессе" && \
+    echo "  just info                 - Информация о вехах" && \
+    echo "" && \
+    echo "🛠️  Разработка:" && \
+    echo "  just test                 - Запустить тесты" && \
+    echo "  just clippy               - Проверка clippy" && \
+    echo "  just fmt                  - Форматирование кода" && \
+    echo "" && \
+    echo "📈 Отчеты:" && \
+    echo "  just daily-report         - Ежедневный отчет" && \
+    echo "  just weekly-report        - Еженедельный отчет" && \
+    echo "" && \
+    echo "🔄 Рабочие процессы:" && \
+    echo "  just workflow-milestone-1 - Полный процесс для вехи 1" && \
+    echo "  just quality-workflow     - Полная проверка качества" && \
+    echo "" && \
+    echo "❓ Справка:" && \
+    echo "  just list                 - Все команды" && \
+    echo "  just quickstart           - Быстрый старт" && \
+    echo "" && \
+    echo "💡 Примеры:" && \
+    echo "  just check-milestone-1 --verbose" && \
+    echo "  just progress-report --output json" && \
+    echo "  just info 2 --output markdown"
+
+# Показать статус системы
+# ИСПРАВЛЯЕМ команду status
+status:
+    @echo "📊 Статус системы Check Milestones:" && \
+    cargo --version && \
+    rustup show active-toolchain 2>/dev/null || echo "rustup not available" && \
+    just progress-report
+
+## 🎯 Псевдонимы для удобства
+# Краткие алиасы
+cm1: check-milestone-1
+cm2: check-milestone-2
+cm3: check-milestone-3
+cm4: check-milestone-4
+cm5: check-milestone-5
+cm6: check-milestone-6
+
+pr: progress-report
+prj: progress-report-json
+prm: progress-report-markdown
+
+i: info
+i1: info-1
+i2: info-2
+i3: info-3
+i4: info-4
+i5: info-5
+i6: info-6
+
+t: test
+c: check
+f: fmt
+cl: clippy
+
+# Рабочие процессы
+wf1: workflow-milestone-1
+wf2: workflow-milestone-2
+qw: quality-workflow
+rp: release-prep

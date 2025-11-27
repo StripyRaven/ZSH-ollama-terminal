@@ -1,0 +1,36 @@
+sequenceDiagram
+    participant U as User
+    participant C as Command
+    participant SV as SecurityValidator
+    participant CA as CommandAnalyzer
+    participant PA as PlatformAdapter
+
+    U->>C: new("ls -la")
+    C->>C: Базовые проверки
+    C->>C: Создание контекста
+    C-->>U: Command~Unvalidated~
+
+    U->>C: validate(validator)
+    C->>SV: validate_command(command)
+    SV->>SV: Проверки безопасности
+    SV-->>C: Command~Validated~
+    C-->>U: Command~Validated~
+
+    U->>C: analyze(analyzer)
+    C->>CA: analyze_command(command)
+    CA->>CA: AI анализ
+    CA-->>C: Command~Analyzed~
+    C-->>U: Command~Analyzed~
+
+    U->>C: mark_safe()
+    C-->>U: Command~SafeToExecute~
+
+    U->>PA: execute_command(command)
+    PA->>PA: Безопасное выполнение
+    PA-->>U: CommandOutput
+
+    %% Альтернативный сценарий
+    Note over U,PA: Прямой анализ без AI
+
+    U->>C: into_analyzed(analysis, score)
+    C-->>U: Command~Analyzed~

@@ -1,0 +1,70 @@
+```mermaid
+classDiagram
+    %% Основные классы системы состояний
+    class Command {
+        +String raw
+        +Vec~String~ parts
+        +CommandContext context
+        +PhantomData~S~ state
+        +Option~CommandAnalysis~ analysis_data
+        +Option~f32~ hallucination_score
+        +raw() &str
+        +parts() &[String]
+        +context() &CommandContext
+        +analysis_data() Option~&CommandAnalysis~
+        +hallucination_score() Option~f32~
+    }
+
+    class CommandContext {
+        +ValidatedPath working_directory
+        +u32 user_id
+        +Vec~(String, String)~ environment
+    }
+
+    class ValidatedPath {
+        +PathBuf inner
+        +PathMetadata metadata
+        +new(impl Into~PathBuf~) Result~Self, DomainError~
+        +as_path() &Path
+        +to_string() String
+    }
+
+    class ValidatedPathRef {
+        +&Path inner
+        +PathMetadata metadata
+        +new(&Path) Result~Self, DomainError~
+        +as_path() &Path
+        +to_string() String
+        +to_owned() ValidatedPath
+    }
+
+    class CommandAnalysis {
+        +String category
+        +RiskLevel risk_level
+        +Vec~String~ safety_recommendations
+        +HashMap~String, Value~ metadata
+    }
+
+    %% Состояния команды
+    class Unvalidated
+    class Validated
+    class Analyzed
+    class SafeToExecute
+
+    %% Связи между классами
+    Command --> CommandContext
+    Command --> Unvalidated
+    Command --> Validated
+    Command --> Analyzed
+    Command --> SafeToExecute
+    CommandContext --> ValidatedPath
+    ValidatedPath --> PathMetadata
+    ValidatedPathRef --> PathMetadata
+    CommandAnalysis --> RiskLevel
+
+    %% Состояния как параметры типа
+    Command ..> Unvalidated : S = Unvalidated
+    Command ..> Validated : S = Validated
+    Command ..> Analyzed : S = Analyzed
+    Command ..> SafeToExecute : S = SafeToExecute
+```

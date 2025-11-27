@@ -1,0 +1,63 @@
+graph TB
+    %% Основные трейты
+    SV[SecurityValidator] --> CV[Command~Unvalidated~]
+    SV --> RV[Command~Validated~]
+
+    CA[CommandAnalyzer] --> AV[Command~Validated~]
+    CA --> AA[Command~Analyzed~]
+
+    TE[TrainingEngine] --> TD[TrainingData]
+    TE --> TM[TrainedModel]
+    TE --> DM[DeployedModel]
+
+    FO[FileOperations] --> VP[ValidatedPath]
+    FO --> FC[FileContent]
+    FO --> FI[FileInfo]
+
+    PA[PlatformAdapter] --> CS[Command~SafeToExecute~]
+    PA --> CO[CommandOutput]
+    PA --> SI[SystemInfo]
+
+    %% Взаимосвязи
+    CV --> CA
+    RV --> CA
+    AA --> PA
+
+    FO --> PA
+    SV --> PA
+
+    %% Группировка по слоям
+    subgraph Domain Layer
+        SV
+        CA
+        TE
+    end
+
+    subgraph Infrastructure Layer
+        FO
+        PA
+    end
+
+    subgraph Data Transfer Objects
+        CV
+        RV
+        AA
+        CS
+        TD
+        TM
+        DM
+        VP
+        FC
+        FI
+        CO
+        SI
+    end
+
+    %% Стили
+    classDef domain fill:#e1f5fe
+    classDef infrastructure fill:#f3e5f5
+    classDef dto fill:#e8f5e8
+
+    class SV,CA,TE domain
+    class FO,PA infrastructure
+    class CV,RV,AA,CS,TD,TM,DM,VP,FC,FI,CO,SI dto

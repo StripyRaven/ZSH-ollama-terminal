@@ -1,0 +1,29 @@
+# .cargo/config.toml - ЕДИНСТВЕННЫЙ источник конфигурации
+#
+[build]
+rustc-wrapper = ""
+target-dir = "target/workspace"
+
+[features]
+default = ["secure-mode", "web-ui", "cli"]
+secure-mode = []      # Расширенная безопасность
+web-ui = []           # Web интерфейс с Tera шаблонами
+training = []         # Система обучения
+cli = []              # CLI приложение
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true
+opt-level = "z"
+debug = false
+
+[profile.dev]
+incremental = true
+opt-level = 0
+debug = true
+
+[profile.test]
+opt-level = 0
+debug = true

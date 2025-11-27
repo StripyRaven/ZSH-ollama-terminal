@@ -1,0 +1,41 @@
+```mrmaid
+flowchart TD
+    %% Создание команды
+    A[Пользовательский ввод] --> B[Command::new]
+    B --> C{Проверка длины}
+    C -->|> 4096 символов| D[Ошибка: Command too long]
+    C -->|✓| E[Получение рабочей директории]
+    E --> F{Path Traversal Check}
+    F -->|Обнаружено ..| G[Ошибка: Security Violation]
+    F -->|✓| H[Создание CommandContext]
+    H --> I[Command~Unvalidated~]
+
+    %% Валидация
+    I --> J[SecurityValidator.validate_command]
+    J --> K{Проверки безопасности}
+    K -->|Нарушение политик| L[Ошибка: DomainError]
+    K -->|✓| M[Command~Validated~]
+
+    %% Анализ
+    M --> N[CommandAnalyzer.analyze_command]
+    N --> O[AI-анализ команды]
+    O --> P{Успешный анализ}
+    P -->|Ошибка модели| Q[Ошибка: Analysis Failed]
+    P -->|✓| R[Command~Analyzed~]
+    R --> S[Установка analysis_data]
+    R --> T[Установка hallucination_score]
+
+    %% Подготовка к выполнению
+    R --> U[Command.mark_safe]
+    U --> V[Command~SafeToExecute~]
+
+    %% Выполнение
+    V --> W[PlatformAdapter.execute_command]
+    W --> X[Безопасное выполнение]
+    X --> Y[CommandOutput]
+
+    %% Альтернативный путь
+    M --> Z[Command.into_analyzed]
+    Z --> R
+
+    ```

@@ -1,0 +1,95 @@
+classDiagram
+    %% Core Command Structure
+    class Command~S~ {
+        +String raw
+        +Vec~String~ parts
+        +CommandContext context
+        +PhantomData~S~ state
+        +Option~CommandAnalysis~ analysis_data
+        +Option~f32~ hallucination_score
+        +raw() &str
+        +parts() &[String]
+        +context() &CommandContext
+        +analysis_data() Option~&CommandAnalysis~
+        +hallucination_score() Option~f32~
+    }
+
+    class CommandContext {
+        +ValidatedPath working_directory
+        +u32 user_id
+        +Vec~(String, String)~ environment
+    }
+
+    class ValidatedPath {
+        +PathBuf inner
+        +PathMetadata metadata
+        +new(impl Into~PathBuf~) Result~Self, DomainError~
+        +from_borrowed(&Path) Result~ValidatedPathRef, DomainError~
+        +as_path() &Path
+        +to_string() String
+    }
+
+    class ValidatedPathRef~'a~ {
+        +&'a Path inner
+        +PathMetadata metadata
+        +new(&'a Path) Result~Self, DomainError~
+        +as_path() &Path
+        +to_string() String
+        +to_owned() ValidatedPath
+    }
+
+    %% Analysis Types
+    class CommandAnalysis {
+        +String category
+        +RiskLevel risk_level
+        +Vec~String~ safety_recommendations
+        +HashMap~String, Value~ metadata
+    }
+
+    class RiskLevel {
+        <<enumeration>>
+        +Low
+        +Medium
+        +High
+    }
+
+    class PathMetadata {
+        +bool is_absolute
+        +usize depth
+        +String normalized
+    }
+
+    %% State Types
+    class Unvalidated {
+        <<state>>
+        +new(String) Result~Command~Unvalidated~, DomainError~
+        +validate(&dyn SecurityValidator) Result~Command~Validated~, DomainError~
+    }
+
+    class Validated {
+        <<state>>
+        +analyze(&dyn CommandAnalyzer) Result~Command~Analyzed~, DomainError~
+        +into_analyzed(CommandAnalysis, f32) Command~Analyzed~
+    }
+
+    class Analyzed {
+        <<state>>
+        +mark_safe() Command~SafeToExecute~
+    }
+
+    class SafeToExecute {
+        <<state>>
+    }
+
+    %% Relationships
+    Command --> CommandContext
+    CommandContext --> ValidatedPath
+    ValidatedPath --> PathMetadata
+    ValidatedPathRef --> PathMetadata
+    Command --> CommandAnalysis
+    CommandAnalysis --> RiskLevel
+
+    %% State Transitions
+    Unvalidated --> Validated : validate
+    Validated --> Analyzed : analyze / into_analyzed
+    Analyzed --> SafeToExecute : mark_safe

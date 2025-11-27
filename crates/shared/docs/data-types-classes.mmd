@@ -1,0 +1,89 @@
+classDiagram
+    %% Core Data Types
+    class HistoricalCommand {
+        +String command
+        +CommandContext context
+        +bool success
+        +Option~String~ output
+    }
+
+    class UserFeedback {
+        +CommandSuggestion suggestion
+        +bool accepted
+        +u8 rating
+    }
+
+    class TrainingContext {
+        +u32 user_id
+        +SystemInfo system_info
+        +SystemTime timestamp
+    }
+
+    class SystemInfo {
+        +String os
+        +String shell
+        +String architecture
+        +u64 memory_mb
+    }
+
+    class TrainingConfig {
+        +u32 epochs
+        +f32 learning_rate
+        +u32 batch_size
+        +f32 validation_split
+    }
+
+    class ModelMetadata {
+        +usize training_data_size
+        +Duration training_duration
+        +Vec~String~ features
+    }
+
+    class ModelEvaluation {
+        +f32 accuracy
+        +f32 precision
+        +f32 recall
+        +f32 f1_score
+    }
+
+    class DeployedModel {
+        +TrainedModel model
+        +String endpoint
+        +DeploymentStatus status
+    }
+
+    class FileInfo {
+        +String name
+        +u64 size
+        +bool is_directory
+        +String permissions
+    }
+
+    class ShellType {
+        <<enumeration>>
+        +Zsh
+        +Bash
+        +Fish
+        +PowerShell
+        +Unknown
+    }
+
+    class DeploymentStatus {
+        <<enumeration>>
+        +Active
+        +Standby
+        +Updating
+        +Failed
+    }
+
+    %% Relationships
+    TrainingData --> HistoricalCommand
+    TrainingData --> UserFeedback
+    TrainingData --> TrainingContext
+    TrainingContext --> SystemInfo
+    TrainedModel --> ModelMetadata
+    TrainingEngine --> ModelEvaluation
+    TrainingEngine --> DeployedModel
+    FileOperations --> FileInfo
+    PlatformAdapter --> ShellType
+    DeployedModel --> DeploymentStatus

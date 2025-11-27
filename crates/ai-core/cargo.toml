@@ -1,0 +1,23 @@
+[package]
+name = "ai-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+shared = { path = "../shared" }
+security = { path = "../security" }
+ollama-client = { path = "../ollama-client" }
+file-ops = { path = "../file-ops" }
+
+tokio = { workspace = true, features = ["full", "sync"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1.0"
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+lru = "0.16"
+uuid = { workspace = true, features = ["v4", "serde"] }
+chrono = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "macros"] }

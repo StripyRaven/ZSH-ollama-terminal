@@ -1,0 +1,30 @@
+graph TB
+    DE[DomainError] --> VE[ValidationError]
+    DE --> SE[SecurityError]
+    DE --> IE[IoError]
+    DE --> AE[AnalysisError]
+
+    VE --> CT[Command too long]
+    VE --> IF[Invalid format]
+    VE --> MP[Missing parameters]
+
+    SE --> PT[Path traversal attempt]
+    SE --> UP[Unauthorized operation]
+    SE --> SL[Security level violation]
+
+    IE --> RF[Read file error]
+    IE --> WF[Write file error]
+    IE --> DNE[Directory not exists]
+
+    AE --> MF[Model failure]
+    AE --> TF[Timeout]
+    AE --> HF[High hallucination score]
+
+    %% Стили ошибок
+    classDef critical fill:#ffcdd2
+    classDef warning fill:#fff9c4
+    classDef info fill:#c8e6c9
+
+    class PT,UP,SL critical
+    class HF,TF warning
+    class MP,IF info

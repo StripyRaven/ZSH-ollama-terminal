@@ -1,0 +1,26 @@
+{# crates/web-ui/templates/components/command_input.html #}
+<div class="command-input-section mb-6">
+    <form
+        hx-post="/analyze"
+        hx-target="#analysis-results"
+        hx-trigger="submit"
+        class="space-y-4"
+    >
+        <div class="flex gap-2">
+            <input
+                type="text"
+                name="command"
+                placeholder="Введите команду для анализа..."
+                class="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value="{{ command | default(value='') }}"
+                required
+            />
+            <button
+                type="submit"
+                class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+                Анализировать
+            </button>
+        </div>
+    </form>
+</div>

@@ -1,0 +1,59 @@
+stateDiagram-v2
+    [*] --> Unvalidated : Command::new()
+
+    state Unvalidated {
+        [*] --> Created : Создана
+        Created --> Validated : validate()
+        Created --> Error : Ошибка валидации
+    }
+
+    state Validated {
+        [*] --> SecurityChecked : Проверки пройдены
+        SecurityChecked --> Analyzed : analyze()
+        SecurityChecked --> PreAnalyzed : into_analyzed()
+        SecurityChecked --> Error : Ошибка анализа
+    }
+
+    state Analyzed {
+        [*] --> AIChecked : AI анализ завершен
+        AIChecked --> SafeToExecute : mark_safe()
+        AIChecked --> Error : Высокий риск
+    }
+
+    state SafeToExecute {
+        [*] --> ReadyForExecution : Готова к выполнению
+        ReadyForExecution --> Executed : execute_command()
+        ReadyForExecution --> Error : Ошибка выполнения
+    }
+
+    state Error {
+        [*] --> ValidationError
+        [*] --> SecurityError
+        [*] --> AnalysisError
+        [*] --> ExecutionError
+    }
+
+    Unvalidated --> Validated : validate()
+    Validated --> Analyzed : analyze() / into_analyzed()
+    Analyzed --> SafeToExecute : mark_safe()
+    SafeToExecute --> [*] : executed
+
+    note right of Unvalidated
+        Исходное состояние
+        Требует валидации
+    end note
+
+    note right of Validated
+        Проверки безопасности
+        пройдены
+    end note
+
+    note right of Analyzed
+        AI анализ завершен
+        Данные анализа доступны
+    end note
+
+    note right of SafeToExecute
+        Готова к безопасному
+        выполнению
+    end note

@@ -1,0 +1,36 @@
+[package]
+name = "check-milestones"
+version = "0.1.0"
+description = "Quality Gates and milestone tracking system for zsh-ollama-terminal"
+edition = "2021"
+authors = ["Your Name <email@example.com>"]
+license = "MIT OR Apache-2.0"
+# repository = "https://github.com/your-username/zsh-ollama-terminal"
+readme = "README.md"
+keywords = ["quality-gates", "milestone", "ci", "testing"]
+categories = ["development-tools", "command-line-utilities"]
+
+[features]
+#default = ["serde", "chrono"]
+cli = ["clap"]  # Для бинарного CLI инструмента
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.0", optional = true, features = ["derive"] }
+thiserror = "2.0"
+tokio = { version = "1.0", features = ["full"] }
+colored = "3.0"
+
+[dev-dependencies]
+tempfile = "3.0"
+
+[lib]
+name = "check_milestones"
+path = "src/lib.rs"
+
+[[bin]]
+name = "check-milestones"
+path = "src/main.rs"
+required-features = ["cli"]
