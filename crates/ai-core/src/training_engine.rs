@@ -8,7 +8,6 @@ use shared::{
     TrainingConfig, TrainingContext, TrainingData, TrainingEngine, UserFeedback,
 };
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 /// Движок обучения персонализированных моделей
 pub struct ModelTrainingEngine {
@@ -47,7 +46,7 @@ impl ModelTrainingEngine {
     pub async fn personalize_model(
         &self,
         user_data: TrainingData,
-        base_model: &TrainedModel,
+        _base_model: &TrainedModel,
         user_id: u32,
     ) -> Result<TrainedModel, DomainError> {
         let personalized_config = TrainingConfig {
@@ -84,7 +83,7 @@ impl TrainingEngine for ModelTrainingEngine {
         let model = self.model_trainer.train(processed_data, config).await?;
 
         // Оценка модели
-        let evaluation = self.model_evaluator.evaluate(&model).await?;
+        let _evaluation = self.model_evaluator.evaluate(&model).await?;
 
         // Регистрация модели
         self.model_registry.register(model.clone()).await?;
@@ -95,10 +94,10 @@ impl TrainingEngine for ModelTrainingEngine {
     async fn evaluate_model(
         &self,
         model: &TrainedModel,
-        test_data: &TrainingData,
+        _test_data: &TrainingData,
     ) -> Result<ModelEvaluation, DomainError> {
         self.model_evaluator
-            .evaluate_with_data(model, test_data)
+            .evaluate_with_data(model, _test_data)
             .await
     }
 
@@ -125,12 +124,13 @@ impl TrainingDataCollector {
     pub async fn process(&self, data: TrainingData) -> Result<ProcessedTrainingData, DomainError> {
         let anonymized_commands = self.anonymize_commands(&data.commands).await?;
         let filtered_feedback = self.filter_feedback(&data.user_feedback).await?;
+        let features = self.extract_features(&anonymized_commands).await?; // ДО перемещения
 
         Ok(ProcessedTrainingData {
-            commands: anonymized_commands,
+            commands: anonymized_commands, // теперь перемещаем
             user_feedback: filtered_feedback,
             context: data.context,
-            features: self.extract_features(&anonymized_commands).await?,
+            features, // уже вычислено
         })
     }
 
@@ -156,11 +156,17 @@ impl TrainingDataCollector {
         let mut anonymized = Vec::new();
 
         for command in commands {
+            // Обрабатываем output асинхронно
+            let output = match &command.output {
+                Some(o) => Some(self.anonymize_output(o).await?),
+                None => None,
+            };
+
             let anonymized_command = HistoricalCommand {
                 command: self.anonymize_command_text(&command.command).await?,
                 context: command.context.clone(),
                 success: command.success,
-                output: command.output.as_ref().map(|o| self.anonymize_output(o)),
+                output, // используем обработанный output
             };
             anonymized.push(anonymized_command);
         }
@@ -280,7 +286,7 @@ impl ModelTrainer {
     pub async fn train(
         &self,
         data: ProcessedTrainingData,
-        config: TrainingConfig,
+        _config: TrainingConfig,
     ) -> Result<TrainedModel, DomainError> {
         // Заглушка для обучения модели
         // В реальной реализации здесь будет интеграция с Ollama или другой ML системой
@@ -365,7 +371,7 @@ impl ModelEvaluator {
     pub async fn evaluate_with_data(
         &self,
         model: &TrainedModel,
-        test_data: &TrainingData,
+        _test_data: &TrainingData,
     ) -> Result<ModelEvaluation, DomainError> {
         // Оценка модели на тестовых данных
         // В реальной реализации здесь будет сложная логика оценки

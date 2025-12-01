@@ -2,9 +2,11 @@
 //! # Advanced Caching System
 //! Продвинутая система кэширования с TTL и стратегиями инвалидации.
 
-use super::CommandAnalysis;
+use crate::CommandAnalysis;
+use crate::TrainedModel;
 use lru::LruCache;
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
@@ -15,6 +17,7 @@ pub struct AnalysisCache {
     metrics: CacheMetrics,
 }
 
+#[derive(Clone)]
 struct CacheEntry {
     analysis: CommandAnalysis,
     timestamp: Instant,
@@ -40,7 +43,7 @@ impl CacheEntry {
 }
 
 /// Метрики кэша
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CacheMetrics {
     hits: RwLock<u64>,
     misses: RwLock<u64>,
@@ -98,7 +101,7 @@ impl CacheMetrics {
 impl AnalysisCache {
     pub fn new(capacity: usize, ttl: Duration) -> Self {
         Self {
-            cache: RwLock::new(LruCache::new(capacity)),
+            cache: RwLock::new(LruCache::new(NonZeroUsize::new(capacity).unwrap())),
             ttl,
             metrics: CacheMetrics::new(),
         }

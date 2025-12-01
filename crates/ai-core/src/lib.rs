@@ -8,19 +8,23 @@ pub mod integration;
 pub mod training_engine;
 
 use async_trait::async_trait;
+
 use lru::LruCache;
 use ollama_client::OllamaClient;
+use shared::TrainedModel;
 use shared::{
     states::{Analyzed, Validated},
-    Command, CommandAnalyzer, CommandSuggestion, DomainError, ModelInfo, SecurityValidator,
+    Command, CommandAnalysis, CommandAnalyzer, CommandSuggestion, DomainError, ModelInfo,
+    SecurityValidator,
 };
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 /// AI анализатор команд с кэшированием и resilience patterns
 pub struct AiAnalyzer {
     security: Arc<dyn SecurityValidator>,
     ollama: Arc<OllamaClient>,
-    cache: tokio::sync::Mutex<LruCache<String, Command<Analyzed>>>,
+    cache: tokio::sync::Mutex<LruCache<String, Arc<Command<Analyzed>>>>,
     hallucination_detector: HallucinationDetector,
     performance_monitor: PerformanceMonitor,
 }
@@ -34,41 +38,36 @@ impl AiAnalyzer {
         Self {
             security,
             ollama,
-            cache: tokio::sync::Mutex::new(LruCache::new(cache_size)),
+            cache: tokio::sync::Mutex::new(LruCache::new(NonZeroUsize::new(cache_size).unwrap())),
             hallucination_detector: HallucinationDetector::new(),
             performance_monitor: PerformanceMonitor::new(),
         }
     }
 
     /// Анализ команды с кэшированием и fallback механизмами
-    pub async fn analyze_command_with_fallback(
+    async fn analyze_command_with_fallback_arc(
         &self,
         command: Command<Validated>,
-    ) -> Result<Command<Analyzed>, DomainError> {
-        // Проверка кэша
+    ) -> Result<Arc<Command<Analyzed>>, DomainError> {
         let cache_key = command.raw().to_string();
+
+        // Проверка кэша
         {
             let mut cache = self.cache.lock().await;
             if let Some(cached) = cache.get(&cache_key) {
                 tracing::info!("Cache hit for command: {}", cache_key);
-                return Ok(cached.clone());
+                return Ok(Arc::clone(cached));
             }
         }
 
-        // AI анализ через Ollama с resilience
+        // Анализ
         let analysis = match self.analyze_with_ollama(&command).await {
             Ok(analysis) => analysis,
-            Err(ollama_error) => {
-                tracing::warn!(
-                    "Ollama analysis failed, using heuristic fallback: {}",
-                    ollama_error
-                );
-                self.analyze_with_heuristics(&command).await?
-            }
+            Err(_) => self.analyze_with_heuristics(&command).await?,
         };
 
-        // Детекция галлюцинаций
         let hallucination_score = self.hallucination_detector.detect(&analysis).await?;
+
         if self
             .hallucination_detector
             .should_reject(hallucination_score)
@@ -84,13 +83,13 @@ impl AiAnalyzer {
             }));
         }
 
-        // Создание анализированной команды
-        let analyzed = Command::new_analyzed(command, analysis, hallucination_score)?;
+        // Создаем Command<Analyzed> и оборачиваем в Arc (только один раз!)
+        let analyzed = Arc::new(command.into_analyzed(analysis, hallucination_score)?);
 
-        // Сохранение в кэш
+        // Сохраняем в кэш
         {
             let mut cache = self.cache.lock().await;
-            cache.put(cache_key, analyzed.clone());
+            cache.put(cache_key, Arc::clone(&analyzed));
         }
 
         Ok(analyzed)
@@ -306,7 +305,36 @@ impl CommandAnalyzer for AiAnalyzer {
         &self,
         command: Command<Validated>,
     ) -> Result<Command<Analyzed>, DomainError> {
-        self.analyze_command_with_fallback(command).await
+        // Убираем кэш для простоты
+        let analysis = match self.analyze_with_ollama(&command).await {
+            Ok(analysis) => analysis,
+            Err(ollama_error) => {
+                tracing::warn!(
+                    "Ollama analysis failed, using heuristic fallback: {}",
+                    ollama_error
+                );
+                self.analyze_with_heuristics(&command).await?
+            }
+        };
+
+        let hallucination_score = self.hallucination_detector.detect(&analysis).await?;
+
+        if self
+            .hallucination_detector
+            .should_reject(hallucination_score)
+        {
+            return Err(DomainError::Analysis(shared::error::AnalysisError {
+                model: "ollama".to_string(),
+                error_type: shared::error::AnalysisErrorType::HallucinationDetected,
+                details: format!(
+                    "Hallucination detected with score: {:.2}",
+                    hallucination_score
+                ),
+                suggestion: Some("Using heuristic analyzer instead".to_string()),
+            }));
+        }
+
+        command.into_analyzed(analysis, hallucination_score)
     }
 
     async fn get_suggestions(
@@ -351,28 +379,6 @@ impl CommandAnalyzer for AiAnalyzer {
     }
 }
 
-/// Анализ команды от AI
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct CommandAnalysis {
-    pub explanation: String,
-    pub risks: Vec<String>,
-    pub suggestions: Vec<String>,
-    pub confidence: f32,
-    pub alternatives: Vec<String>,
-}
-
-impl CommandAnalysis {
-    pub fn empty() -> Self {
-        Self {
-            explanation: "No analysis available".to_string(),
-            risks: vec![],
-            suggestions: vec![],
-            confidence: 0.0,
-            alternatives: vec![],
-        }
-    }
-}
-
 /// Детектор галлюцинаций AI
 pub struct HallucinationDetector {
     threshold: f32,
@@ -385,7 +391,7 @@ impl HallucinationDetector {
 
     pub async fn detect(&self, analysis: &CommandAnalysis) -> Result<f32, DomainError> {
         // Простая эвристика: низкая уверенность + много рисков = возможные галлюцинации
-        let mut score = 0.0;
+        let mut score: f32 = 0.0; // Добавляем аннотацию типа
 
         // Штраф за низкую уверенность
         if analysis.confidence < 0.3 {
@@ -422,64 +428,37 @@ impl HallucinationDetector {
     }
 }
 
-/// Монитор производительности
 pub struct PerformanceMonitor {
-    analysis_times: tokio::sync::Mutex<Vec<std::time::Duration>>,
+    analysis_times: std::sync::Arc<std::sync::Mutex<Vec<std::time::Duration>>>,
 }
 
 impl PerformanceMonitor {
     pub fn new() -> Self {
         Self {
-            analysis_times: tokio::sync::Mutex::new(Vec::new()),
+            analysis_times: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
 
     pub fn record_analysis_time(&self, duration: std::time::Duration) {
-        tokio::task::spawn_blocking({
-            let times = self.analysis_times.clone();
-            move || {
-                let mut times = times.blocking_lock();
-                times.push(duration);
-                // Храним только последние 100 измерений
-                if times.len() > 100 {
-                    times.remove(0);
-                }
+        let times = self.analysis_times.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut times = times.lock().unwrap();
+            times.push(duration);
+            if times.len() > 100 {
+                times.remove(0);
             }
         });
     }
 
     pub async fn average_analysis_time(&self) -> std::time::Duration {
-        let times = self.analysis_times.lock().await;
+        let times = self.analysis_times.lock().unwrap();
         if times.is_empty() {
             return std::time::Duration::from_millis(0);
         }
-
         let total: std::time::Duration = times.iter().sum();
         total / times.len() as u32
     }
 }
-
-// Расширяем типы Command для поддержки analyzed состояния
-// TODO перенести в имплы
-// impl Command<shared::states::Validated> {
-//     pub fn into_analyzed(
-//         self,
-//         analysis: CommandAnalysis,
-//         hallucination_score: f32,
-//     ) -> Result<Command<shared::states::Analyzed>, DomainError> {
-//         Ok(Command {
-//             raw: self.raw().to_string(),
-//             parts: self.parts().to_vec(),
-//             context: self.context().clone(),
-//             state: std::marker::PhantomData,
-//             analysis_data: Some(analysis),
-//             hallucination_score,
-//         })
-//     }
-// }
-
-// Добавляем методы доступа к данным анализа
-//}
 
 #[cfg(test)]
 mod tests {

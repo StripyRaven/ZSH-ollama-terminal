@@ -4,8 +4,10 @@
 
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
-use shared::error::{AnalysisError, AnalysisErrorType};
-use shared::{states, Command, CommandAnalyzer as CommandAnalyzerTrait, DomainError};
+use shared::error::{AnalysisError, AnalysisErrorType, NetworkError, NetworkOperation};
+use shared::{
+    states, Command, CommandAnalysis, CommandAnalyzer as CommandAnalyzerTrait, DomainError,
+};
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -66,7 +68,8 @@ impl OllamaClient {
             stream: false,
         };
 
-        let response = timeout(self.timeout, self.client.post(&url).json(&request).send())
+        // timeout возвращает Result<Result<Response, reqwest::Error>, Elapsed>
+        let response_result = timeout(self.timeout, self.client.post(&url).json(&request).send())
             .await
             .map_err(|_| {
                 DomainError::Analysis(AnalysisError {
@@ -75,24 +78,45 @@ impl OllamaClient {
                     details: "Request timeout".to_string(),
                     suggestion: Some("Try increasing timeout or check Ollama server".to_string()),
                 })
-            })?;
+            })?; // response_result: Result<Response, reqwest::Error>
+
+        // Обрабатываем результат запроса
+        let response = response_result.map_err(|_e| {
+            DomainError::Network(NetworkError {
+                endpoint: url.clone(),
+                operation: NetworkOperation::Connection,
+                status_code: None,
+            })
+        })?;
 
         if response.status().is_success() {
-            Ok(response?)
+            Ok(response)
         } else {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+
             Err(DomainError::Analysis(AnalysisError {
                 model: self.model.clone(),
                 error_type: AnalysisErrorType::ModelUnavailable,
-                details: format!(
-                    "HTTP {}: {}",
-                    response.status(),
-                    response?.text().await.unwrap_or_default()?
-                ),
+                details: format!("HTTP {}: {}", status, error_text),
                 suggestion: Some(
                     "Check if Ollama server is running and model is available".to_string(),
                 ),
             }))
         }
+    }
+
+    // Делаем метод публичным
+    pub async fn generate_completion(&self, prompt: String) -> Result<String, DomainError> {
+        let response = self.send_request_with_retry(prompt).await?;
+        let text = response.text().await.map_err(|_e| {
+            DomainError::Network(NetworkError {
+                endpoint: self.base_url.clone(),
+                operation: NetworkOperation::Response,
+                status_code: None,
+            })
+        })?;
+        Ok(text)
     }
 }
 
@@ -109,8 +133,8 @@ impl CommandAnalyzerTrait for OllamaClient {
             command.context().user_id
         );
 
-        let response = self.send_request_with_retry(prompt).await?;
-        let generate_response: GenerateResponse = response.json().await.map_err(|e| {
+        let _response = self.send_request_with_retry(prompt).await?; // Используем или помечаем как неиспользуемую
+        let _generate_response: GenerateResponse = _response.json().await.map_err(|e| {
             DomainError::Analysis(AnalysisError {
                 model: self.model.clone(),
                 error_type: AnalysisErrorType::InvalidResponse,
@@ -119,23 +143,18 @@ impl CommandAnalyzerTrait for OllamaClient {
             })
         })?;
 
-        // Преобразуем команду в Analyzed состояние
-        Ok(Command {
-            raw: command.raw().to_string(),
-            parts: command.parts().to_vec(),
-            context: command.context().clone(),
-            state: std::marker::PhantomData,
-            analysis_data: None,
-            hallucination_score: None,
-        })
+        // Используем into_analyzed для создания Command<Analyzed>
+        command.into_analyzed(
+            CommandAnalysis::empty(), // Временная заглушка
+            0.0,                      // Временная заглушка для hallucination_score
+        )
     }
 
     async fn get_suggestions(
         &self,
-        analysis: &Command<states::Analyzed>,
+        _analysis: &Command<states::Analyzed>,
     ) -> Result<Vec<shared::CommandSuggestion>, DomainError> {
-        // В реальной реализации здесь бы делался запрос к Ollama для получения предложений
-        // Сейчас возвращаем заглушку
+        // Временная заглушка
         Ok(vec![])
     }
 
@@ -161,7 +180,7 @@ struct GenerateRequest {
 
 #[derive(Debug, Deserialize)]
 struct GenerateResponse {
-    response: String,
+    _response: String,
 }
 
 #[cfg(test)]
@@ -173,6 +192,4 @@ mod tests {
         let client = OllamaClient::new("http://localhost:11434".to_string(), "llama2".to_string());
         assert_eq!(client.model, "llama2");
     }
-
-    // Note: Для интеграционных тестов потребуется запущенный Ollama сервер
 }

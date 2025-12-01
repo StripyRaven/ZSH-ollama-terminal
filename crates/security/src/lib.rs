@@ -2,16 +2,13 @@
 //! # Security Validator Implementation
 //! Реализация SecurityValidator с изолированными правилами безопасности.
 
-use crate::states::Validated;
-use async_trait;
 use regex::Regex;
 use shared::error::{
     SecurityContext, SecurityError, SecuritySeverity, SecurityViolation, ValidationError,
 };
-use shared::states::CommandState;
-use shared::CommandV2;
-use shared::SecurityLevel;
-use shared::{states, Command, DomainError, SecurityValidator as SecurityValidatorTrait};
+use shared::{
+    states, Command, DomainError, SecurityLevel, SecurityValidator as SecurityValidatorTrait,
+};
 use std::collections::HashSet;
 
 pub struct SecurityValidator {
@@ -67,17 +64,7 @@ impl SecurityValidatorTrait for SecurityValidator {
         &self,
         command: Command<states::Unvalidated>,
     ) -> Result<Command<states::Validated>, DomainError> {
-        let old_command = Command::<states::Unvalidated> {
-            raw: command.raw,
-            parts: command.parts,
-            context: command.context,
-            state: std::marker::PhantomData,
-            analysis_data: None,
-            hallucination_score: None,
-        };
-
-        // Используем существующую логику проверок со старым Command
-        let raw = old_command.raw().to_string();
+        let raw = command.raw().to_string();
 
         // Проверка по блокируемым паттернам
         for pattern in &self.blocked_patterns {
@@ -86,8 +73,8 @@ impl SecurityValidatorTrait for SecurityValidator {
                     violation: SecurityViolation::CommandInjectionAttempt,
                     severity: SecuritySeverity::High,
                     context: SecurityContext {
-                        user_id: old_command.context().user_id,
-                        working_directory: old_command.context().working_directory.to_string(),
+                        user_id: command.context().user_id,
+                        working_directory: command.context().working_directory.to_string(),
                         attempted_operation: raw.clone(),
                     },
                 }));
@@ -95,7 +82,7 @@ impl SecurityValidatorTrait for SecurityValidator {
         }
 
         // Проверка разрешенных команд
-        if let Some(first_part) = old_command.parts().first() {
+        if let Some(first_part) = command.parts().first() {
             if !self.allowed_commands.contains(first_part) {
                 return Err(DomainError::Validation(ValidationError {
                     reason: format!("Command '{}' is not allowed", first_part),
@@ -108,39 +95,37 @@ impl SecurityValidatorTrait for SecurityValidator {
 
         // Применяем дополнительные правила
         for rule in &self.rules {
-            if let Err(error) = rule.check(&old_command).await {
+            if let Err(error) = rule.check(&command).await {
                 return Err(error);
             }
         }
 
-        // Возвращаем CommandV2 в состоянии Validated
-        Ok(CommandV2 {
-            raw: old_command.raw().to_string(),
-            parts: old_command.parts().to_vec(),
-            context: old_command.context().clone(),
-            state: CommandState::Validated(Validated {
-                security_level: SecurityLevel::User,
-                validation_timestamp: std::time::SystemTime::now(),
-            }),
+        // Преобразуем команду в Validated состояние
+        Ok(Command {
+            raw: command.raw().to_string(),
+            parts: command.parts().to_vec(),
+            context: command.context().clone(),
+            state: std::marker::PhantomData,
+            analysis_data: None,       // ДОБАВЛЯЕМ
+            hallucination_score: None, // ДОБАВЛЯЕМ
         })
     }
 
     fn get_security_level(&self) -> SecurityLevel {
+        // Исправляем тип
         SecurityLevel::User
     }
 
-    fn can_handle_command(&self, command: &CommandV2) -> bool {
-        // ✅ Меняем на &CommandV2
-        matches!(command.state, CommandState::Unvalidated(_))
+    fn can_handle_command(&self, _command: &Command<states::Unvalidated>) -> bool {
+        // Можем обрабатывать все команды
+        true
     }
 }
 
 // Трейт для правил безопасности
 #[async_trait::async_trait]
-#[async_trait::async_trait]
 pub trait SecurityRule: Send + Sync {
     async fn check(&self, command: &Command<states::Unvalidated>) -> Result<(), DomainError>;
-    fn get_rule_name(&self) -> &str;
 }
 
 // Правило для защиты от path traversal
@@ -164,10 +149,6 @@ impl SecurityRule for PathTraversalRule {
         }
         Ok(())
     }
-
-    fn get_rule_name(&self) -> &str {
-        "path_traversal"
-    }
 }
 
 // Правило для защиты от инъекций команд
@@ -176,11 +157,12 @@ struct CommandInjectionRule;
 #[async_trait::async_trait]
 impl SecurityRule for CommandInjectionRule {
     async fn check(&self, command: &Command<states::Unvalidated>) -> Result<(), DomainError> {
+        let dangerous_chars = ['|', '&', ';', '`', '$', '>', '<'];
         for part in command.parts() {
-            if self.is_dangerous_pattern(part) {
+            if dangerous_chars.iter().any(|c| part.contains(*c)) {
                 return Err(DomainError::Security(SecurityError {
                     violation: SecurityViolation::CommandInjectionAttempt,
-                    severity: SecuritySeverity::High,
+                    severity: SecuritySeverity::Critical,
                     context: SecurityContext {
                         user_id: command.context().user_id,
                         working_directory: command.context().working_directory.to_string(),
@@ -190,10 +172,6 @@ impl SecurityRule for CommandInjectionRule {
             }
         }
         Ok(())
-    }
-
-    fn get_rule_name(&self) -> &str {
-        "command_injection"
     }
 }
 
@@ -203,11 +181,12 @@ struct DestructiveOperationRule;
 #[async_trait::async_trait]
 impl SecurityRule for DestructiveOperationRule {
     async fn check(&self, command: &Command<states::Unvalidated>) -> Result<(), DomainError> {
+        let destructive_commands = ["rm", "dd", "mkfs", "fdisk", "shutdown", "reboot"];
         if let Some(first_part) = command.parts().first() {
-            if DESTRUCTIVE_COMMANDS.contains(&first_part.as_str()) {
+            if destructive_commands.contains(&first_part.as_str()) {
                 return Err(DomainError::Security(SecurityError {
-                    violation: SecurityViolation::DestructiveOperationAttempt,
-                    severity: SecuritySeverity::High,
+                    violation: SecurityViolation::ResourceExhaustion,
+                    severity: SecuritySeverity::Critical,
                     context: SecurityContext {
                         user_id: command.context().user_id,
                         working_directory: command.context().working_directory.to_string(),
@@ -218,10 +197,6 @@ impl SecurityRule for DestructiveOperationRule {
         }
         Ok(())
     }
-
-    fn get_rule_name(&self) -> &str {
-        "destructive_operation"
-    }
 }
 
 // Правило для контроля сетевых операций
@@ -230,10 +205,11 @@ struct NetworkOperationRule;
 #[async_trait::async_trait]
 impl SecurityRule for NetworkOperationRule {
     async fn check(&self, command: &Command<states::Unvalidated>) -> Result<(), DomainError> {
+        let network_commands = ["curl", "wget", "ssh", "scp", "nc", "telnet"];
         if let Some(first_part) = command.parts().first() {
-            if NETWORK_COMMANDS.contains(&first_part.as_str()) {
+            if network_commands.contains(&first_part.as_str()) {
                 return Err(DomainError::Security(SecurityError {
-                    violation: SecurityViolation::NetworkOperationAttempt,
+                    violation: SecurityViolation::DataExfiltration,
                     severity: SecuritySeverity::Medium,
                     context: SecurityContext {
                         user_id: command.context().user_id,
@@ -244,10 +220,6 @@ impl SecurityRule for NetworkOperationRule {
             }
         }
         Ok(())
-    }
-
-    fn get_rule_name(&self) -> &str {
-        "network_operation"
     }
 }
 

@@ -18,13 +18,34 @@ use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommandAnalysis {
+    pub explanation: String,
+    pub risks: Vec<String>,
+    pub suggestions: Vec<String>,
+    pub confidence: f32,
+    pub alternatives: Vec<String>,
+}
+
+impl CommandAnalysis {
+    pub fn empty() -> Self {
+        Self {
+            explanation: "No analysis available".to_string(),
+            risks: vec![],
+            suggestions: vec![],
+            confidence: 0.0,
+            alternatives: vec![],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Command<S = states::Unvalidated> {
     pub raw: String,
     pub parts: Vec<String>,
     pub context: CommandContext,
     pub state: PhantomData<S>,
-    pub analysis_data: Option(),
-    pub hallucination_score: Option(),
+    pub analysis_data: Option<CommandAnalysis>, // ДОБАВЛЯЕМ ТИП
+    pub hallucination_score: Option<f32>,       // ДОБАВЛЯЕМ ТИП
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,15 +102,18 @@ impl Command<states::Unvalidated> {
             parts,
             context,
             state: PhantomData,
+            analysis_data: None,       // ДОБАВЛЯЕМ
+            hallucination_score: None, // ДОБАВЛЯЕМ
         })
     }
 
     /// Только невалидированные команды можно валидировать
-    pub fn validate(
+    pub async fn validate(
+        // Добавляем async
         self,
         validator: &dyn SecurityValidator,
     ) -> Result<Command<states::Validated>, DomainError> {
-        validator.validate_command(self)
+        validator.validate_command(self).await // Добавляем .await
     }
 }
 
@@ -106,27 +130,26 @@ impl Command<states::Validated> {
         self,
         analysis: CommandAnalysis,
         hallucination_score: f32,
-    ) -> Result<Command<shared::states::Analyzed>, DomainError> {
+    ) -> Result<Command<states::Analyzed>, DomainError> {
+        // Исправляем: states::Analyzed вместо shared::states::Analyzed
         Ok(Command {
-            raw: self.raw().to_string(),
-            parts: self.parts().to_vec(),
-            context: self.context().clone(),
+            raw: self.raw,
+            parts: self.parts,
+            context: self.context,
             state: std::marker::PhantomData,
             analysis_data: Some(analysis),
-            hallucination_score,
+            hallucination_score: Some(hallucination_score), // Исправляем: Some()
         })
     }
 }
 
 impl Command<states::Analyzed> {
     pub fn analysis_data(&self) -> Option<&CommandAnalysis> {
-        // В реальной реализации здесь будет доступ к данным анализа
-        None
+        self.analysis_data.as_ref() // Исправляем: возвращаем реальные данные
     }
 
     pub fn hallucination_score(&self) -> f32 {
-        // В реальной реализации здесь будет возвращен счетчик галлюцинаций
-        0.0
+        self.hallucination_score.unwrap_or(0.0) // Исправляем: возвращаем реальные данные
     }
 
     /// Только проанализированные команды можно маркировать как безопасные
@@ -136,7 +159,7 @@ impl Command<states::Analyzed> {
             parts: self.parts,
             context: self.context,
             state: PhantomData,
-            analysis_data: None, // tion_detector
+            analysis_data: None,
             hallucination_score: None,
         }
     }
@@ -222,13 +245,15 @@ mod tests {
 
     #[test]
     fn test_validated_path_creation() {
-        let path = ValidatedPath::new(".").unwrap();
+        use std::path::PathBuf;
+        let path = ValidatedPath::new(PathBuf::from(".")).unwrap();
         assert!(path.to_string().contains('.'));
     }
 
     #[test]
     fn test_validated_path_traversal_protection() {
-        let result = ValidatedPath::new("../sensitive");
+        use std::path::PathBuf;
+        let result = ValidatedPath::new(PathBuf::from("../sensitive"));
         assert!(matches!(result, Err(DomainError::Security(_))));
     }
 }

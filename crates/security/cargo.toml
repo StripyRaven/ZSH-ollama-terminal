@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+shared = { path = "../shared" }
+# внешние
 async-trait = { workspace = true }
 regex = "1.0"
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-
-shared = { path = "../shared" }
