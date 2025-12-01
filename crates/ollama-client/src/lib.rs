@@ -78,7 +78,7 @@ impl OllamaClient {
             })?;
 
         if response.status().is_success() {
-            Ok(response)
+            Ok(response?)
         } else {
             Err(DomainError::Analysis(AnalysisError {
                 model: self.model.clone(),
@@ -86,7 +86,7 @@ impl OllamaClient {
                 details: format!(
                     "HTTP {}: {}",
                     response.status(),
-                    response.text().await.unwrap_or_default()
+                    response?.text().await.unwrap_or_default()?
                 ),
                 suggestion: Some(
                     "Check if Ollama server is running and model is available".to_string(),
@@ -125,6 +125,8 @@ impl CommandAnalyzerTrait for OllamaClient {
             parts: command.parts().to_vec(),
             context: command.context().clone(),
             state: std::marker::PhantomData,
+            analysis_data: None,
+            hallucination_score: None,
         })
     }
 

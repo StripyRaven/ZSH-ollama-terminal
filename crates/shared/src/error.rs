@@ -5,6 +5,7 @@
 //! # Comprehensive Error System with Exhaustive Matching
 //! Полная система ошибок с гарантированной обработкой всех вариантов.
 
+#[allow(unused_imports)] // TODO chch
 use crate::SecurityLevel;
 use serde::{Deserialize, Serialize};
 use std::fmt;

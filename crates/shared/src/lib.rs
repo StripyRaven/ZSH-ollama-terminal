@@ -8,6 +8,7 @@ pub mod states;
 pub mod traits;
 
 // Re-export для удобства использования
+//use crate::CommandAnalisys;
 pub use error::DomainError;
 pub use serialization::SerializedCommand;
 pub use states::*;
@@ -22,6 +23,8 @@ pub struct Command<S = states::Unvalidated> {
     pub parts: Vec<String>,
     pub context: CommandContext,
     pub state: PhantomData<S>,
+    pub analysis_data: Option(),
+    pub hallucination_score: Option(),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,9 +101,34 @@ impl Command<states::Validated> {
     ) -> Result<Command<states::Analyzed>, DomainError> {
         analyzer.analyze_command(self).await
     }
+
+    pub fn into_analyzed(
+        self,
+        analysis: CommandAnalysis,
+        hallucination_score: f32,
+    ) -> Result<Command<shared::states::Analyzed>, DomainError> {
+        Ok(Command {
+            raw: self.raw().to_string(),
+            parts: self.parts().to_vec(),
+            context: self.context().clone(),
+            state: std::marker::PhantomData,
+            analysis_data: Some(analysis),
+            hallucination_score,
+        })
+    }
 }
 
 impl Command<states::Analyzed> {
+    pub fn analysis_data(&self) -> Option<&CommandAnalysis> {
+        // В реальной реализации здесь будет доступ к данным анализа
+        None
+    }
+
+    pub fn hallucination_score(&self) -> f32 {
+        // В реальной реализации здесь будет возвращен счетчик галлюцинаций
+        0.0
+    }
+
     /// Только проанализированные команды можно маркировать как безопасные
     pub fn mark_safe(self) -> Command<states::SafeToExecute> {
         Command {
@@ -108,6 +136,8 @@ impl Command<states::Analyzed> {
             parts: self.parts,
             context: self.context,
             state: PhantomData,
+            analysis_data: None, // tion_detector
+            hallucination_score: None,
         }
     }
 }

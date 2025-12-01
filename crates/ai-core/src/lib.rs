@@ -2,6 +2,11 @@
 //! # AI Core Business Logic
 //! Бизнес-логика AI анализа команд с кэшированием, dependency injection и детекцией галлюцинаций.
 
+pub mod cache;
+pub mod hallucination_detector;
+pub mod integration;
+pub mod training_engine;
+
 use async_trait::async_trait;
 use lru::LruCache;
 use ollama_client::OllamaClient;
@@ -456,35 +461,25 @@ impl PerformanceMonitor {
 
 // Расширяем типы Command для поддержки analyzed состояния
 // TODO перенести в имплы
-impl Command<shared::states::Validated> {
-    pub fn into_analyzed(
-        self,
-        analysis: CommandAnalysis,
-        hallucination_score: f32,
-    ) -> Result<Command<shared::states::Analyzed>, DomainError> {
-        Ok(Command {
-            raw: self.raw().to_string(),
-            parts: self.parts().to_vec(),
-            context: self.context().clone(),
-            state: std::marker::PhantomData,
-            analysis_data: Some(analysis),
-            hallucination_score,
-        })
-    }
-}
+// impl Command<shared::states::Validated> {
+//     pub fn into_analyzed(
+//         self,
+//         analysis: CommandAnalysis,
+//         hallucination_score: f32,
+//     ) -> Result<Command<shared::states::Analyzed>, DomainError> {
+//         Ok(Command {
+//             raw: self.raw().to_string(),
+//             parts: self.parts().to_vec(),
+//             context: self.context().clone(),
+//             state: std::marker::PhantomData,
+//             analysis_data: Some(analysis),
+//             hallucination_score,
+//         })
+//     }
+// }
 
 // Добавляем методы доступа к данным анализа
-impl Command<shared::states::Analyzed> {
-    pub fn analysis_data(&self) -> Option<&CommandAnalysis> {
-        // В реальной реализации здесь будет доступ к данным анализа
-        None
-    }
-
-    pub fn hallucination_score(&self) -> f32 {
-        // В реальной реализации здесь будет возвращен счетчик галлюцинаций
-        0.0
-    }
-}
+//}
 
 #[cfg(test)]
 mod tests {

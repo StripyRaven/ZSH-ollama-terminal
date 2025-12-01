@@ -16,7 +16,7 @@ pub struct TypedResponse<T = ()> {
     security: SecurityHeaders,
 }
 
-#[derive(Default)]
+// #[derive(Default)]
 pub struct SecurityHeaders {
     pub content_security_policy: Option<String>,
     pub x_frame_options: Option<String>,
