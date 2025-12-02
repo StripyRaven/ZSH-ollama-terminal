@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use ollama_client::OllamaClient;
 
 use shared::{
-    states::{Analyzed, SecurityLevel, Validated},
+    states::{Analyzed, Validated},
     Command, CommandAnalyzer, CommandSuggestion, DomainError, ModelInfo, SecurityValidator,
     TrainingEngine,
 };
@@ -252,6 +252,7 @@ impl CommandAnalyzer for IntegratedAICore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use shared::SecurityLevel;
     use shared::{states::Unvalidated, Command};
 
     // Если IntegratedAICore не существует, создаем мок или временную структуру

@@ -3,12 +3,13 @@
 //! Гарантированная типизация HTTP ответов с security headers.
 
 use axum::{
-    http::{HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
 
-/// Типизированные HTTP ответы с compile-time гарантиями
+/// Generic-типизированные HTTP ответы с compile-time гарантиями
+/// T - тип данных тела ответа (для JSON) или `()` для HTML/Plain текста
 pub struct TypedResponse<T = ()> {
     status: StatusCode,
     headers: HeaderMap,
@@ -17,6 +18,8 @@ pub struct TypedResponse<T = ()> {
 }
 
 // #[derive(Default)]
+/// Security headers для защиты веб-приложения
+/// Устанавливаются по умолчанию, но могут быть переопределены
 pub struct SecurityHeaders {
     pub content_security_policy: Option<String>,
     pub x_frame_options: Option<String>,
@@ -27,6 +30,7 @@ pub struct SecurityHeaders {
 impl Default for SecurityHeaders {
     fn default() -> Self {
         Self {
+            // Разрешаем HTMX из CDN для динамических обновлений
             content_security_policy: Some("default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com/htmx.org@1.9.6".to_string()),
             x_frame_options: Some("DENY".to_string()),
             x_content_type_options: Some("nosniff".to_string()),
@@ -35,13 +39,15 @@ impl Default for SecurityHeaders {
     }
 }
 
+/// Тип тела HTTP ответа с generic-параметром T для JSON данных
 pub enum ResponseBody<T> {
     Html(String),
-    Json(T),
+    Json(T), // T должен реализовывать Serialize
     Plain(String),
 }
 
 impl<T> TypedResponse<T> {
+    /// Создаёт HTML ответ с security headers
     pub fn html_secure(content: String) -> Self {
         Self {
             status: StatusCode::OK,
@@ -51,6 +57,7 @@ impl<T> TypedResponse<T> {
         }
     }
 
+    /// Создаёт HTML фрагмент для HTMX с заголовком HX-Reswap
     pub fn htmx_fragment(content: String) -> Self {
         let mut headers = Self::html_headers();
         headers.insert("HX-Reswap", "innerHTML".parse().unwrap());
@@ -63,6 +70,8 @@ impl<T> TypedResponse<T> {
         }
     }
 
+    /// Создаёт JSON ответ с security headers
+    /// T должен реализовывать Serialize
     pub fn json_secure(data: T) -> Self
     where
         T: Serialize,
@@ -176,7 +185,9 @@ impl IntoResponse for TypedErrorResponse {
             self.message
         );
 
-        TypedResponse {
+        // Используем `TypedResponse::<()>` потому что ResponseBody::Plain не использует generic T
+        // Это позволяет компилятору вывести конкретный тип для TypedResponse
+        TypedResponse::<()> {
             status: self.status,
             headers: HeaderMap::new(),
             body: ResponseBody::Plain(body),
