@@ -427,7 +427,6 @@ pub struct ProcessedTrainingData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use shared::{CommandSuggestion, SecurityLevel};
 
     #[tokio::test]
     async fn test_training_engine_creation() {
@@ -465,7 +464,7 @@ mod tests {
         let command = HistoricalCommand {
             command: "cat /home/user/documents/file.txt".to_string(),
             context: shared::CommandContext {
-                working_directory: shared::ValidatedPath::new(".").unwrap(),
+                working_directory: shared::ValidatedPath::new(std::path::Path::new(".")).unwrap(),
                 user_id: 1000,
                 environment: vec![],
             },

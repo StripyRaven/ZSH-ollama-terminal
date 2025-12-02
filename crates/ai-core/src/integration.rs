@@ -252,6 +252,7 @@ impl CommandAnalyzer for IntegratedAICore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CompletionGenerator;
     use shared::SecurityLevel;
     use shared::{states::Unvalidated, Command};
 
@@ -308,7 +309,22 @@ mod tests {
     }
 
     struct MockSecurityValidator;
+
     struct MockOllamaClient;
+
+    #[async_trait]
+    impl CompletionGenerator for MockOllamaClient {
+        async fn generate_completion(&self, _prompt: String) -> Result<String, DomainError> {
+            Ok(r#"{
+                "explanation": "test",
+                "risks": [],
+                "suggestions": [],
+                "confidence": 0.9,
+                "alternatives": []
+            }"#
+            .to_string())
+        }
+    }
 
     #[async_trait]
     impl SecurityValidator for MockSecurityValidator {
@@ -376,7 +392,7 @@ mod tests {
         let ollama = Arc::new(MockOllamaClient::new());
 
         // Используем AiAnalyzer вместо отсутствующего AICoreBuilder
-        let analyzer = AiAnalyzer::new(security, ollama, 100);
+        let analyzer = AiAnalyzer::new(security, Arc::new(MockOllamaClient::new()), 100);
 
         // Просто проверяем, что создан
         assert!(true); // Упрощенная проверка

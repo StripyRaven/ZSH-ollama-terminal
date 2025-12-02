@@ -10,31 +10,48 @@ pub mod training_engine;
 use async_trait::async_trait;
 
 use lru::LruCache;
-use ollama_client::OllamaClient;
+use shared::CommandAnalyzer;
+
+use ollama_client;
 use shared::TrainedModel;
 use shared::{
     states::{Analyzed, Validated},
-    Command, CommandAnalysis, CommandAnalyzer, CommandSuggestion, DomainError, ModelInfo,
-    SecurityValidator,
+    Command, CommandAnalysis, CommandSuggestion, DomainError, ModelInfo, SecurityValidator,
 };
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
+// Добавьте в начало файла, после импортов:
+#[async_trait]
+pub trait CompletionGenerator: Send + Sync {
+    async fn generate_completion(&self, prompt: String) -> Result<String, DomainError>;
+}
+
+// Реализуем для OllamaClient
+#[async_trait]
+impl CompletionGenerator for ollama_client::OllamaClient {
+    async fn generate_completion(&self, prompt: String) -> Result<String, DomainError> {
+        self.generate_completion(prompt).await
+    }
+}
+
 /// AI анализатор команд с кэшированием и resilience patterns
-pub struct AiAnalyzer {
+pub struct AiAnalyzer<G = ollama_client::OllamaClient>
+where
+    G: CompletionGenerator,
+{
     security: Arc<dyn SecurityValidator>,
-    ollama: Arc<OllamaClient>,
+    ollama: Arc<G>,
     cache: tokio::sync::Mutex<LruCache<String, Arc<Command<Analyzed>>>>,
     hallucination_detector: HallucinationDetector,
     performance_monitor: PerformanceMonitor,
 }
 
-impl AiAnalyzer {
-    pub fn new(
-        security: Arc<dyn SecurityValidator>,
-        ollama: Arc<OllamaClient>,
-        cache_size: usize,
-    ) -> Self {
+impl<G> AiAnalyzer<G>
+where
+    G: CompletionGenerator,
+{
+    pub fn new(security: Arc<dyn SecurityValidator>, ollama: Arc<G>, cache_size: usize) -> Self {
         Self {
             security,
             ollama,
@@ -300,7 +317,11 @@ impl AiAnalyzer {
 }
 
 #[async_trait]
-impl CommandAnalyzer for AiAnalyzer {
+#[async_trait]
+impl<G> CommandAnalyzer for AiAnalyzer<G>
+where
+    G: CompletionGenerator + Send + Sync,
+{
     async fn analyze_command(
         &self,
         command: Command<Validated>,
@@ -464,9 +485,9 @@ impl PerformanceMonitor {
 mod tests {
     use super::*;
     use shared::{states::Unvalidated, Command};
+    use std::marker::PhantomData;
 
     struct MockSecurityValidator;
-    struct MockOllamaClient;
 
     #[async_trait]
     impl SecurityValidator for MockSecurityValidator {
@@ -474,19 +495,49 @@ mod tests {
             &self,
             command: Command<Unvalidated>,
         ) -> Result<Command<Validated>, DomainError> {
-            Ok(Command::new(command.raw().to_string()).unwrap())
+            // Создаём команду в состоянии Validated
+            let validated = Command {
+                raw: command.raw,
+                parts: command.parts,
+                context: command.context,
+                state: PhantomData,
+                analysis_data: None,
+                hallucination_score: None,
+            };
+            Ok(validated)
+        }
+
+        fn get_security_level(&self) -> shared::states::SecurityLevel {
+            shared::states::SecurityLevel::User
+        }
+
+        fn can_handle_command(&self, _command: &Command<Unvalidated>) -> bool {
+            true
         }
     }
+
+    struct MockOllamaClient;
 
     impl MockOllamaClient {
         pub fn new() -> Self {
             Self
         }
+
+        pub async fn generate_completion(&self, _prompt: String) -> Result<String, DomainError> {
+            Ok(r#"{
+                "explanation": "Lists directory contents with detailed view",
+                "risks": ["None"],
+                "suggestions": ["Use -lh for human-readable sizes"],
+                "confidence": 0.95,
+                "alternatives": ["ls -lh", "exa"]
+            }"#
+            .to_string())
+        }
     }
 
     #[async_trait]
-    impl ollama_client::OllamaClient for MockOllamaClient {
-        async fn generate_completion(&self, prompt: String) -> Result<String, DomainError> {
+    impl CompletionGenerator for MockOllamaClient {
+        async fn generate_completion(&self, _prompt: String) -> Result<String, DomainError> {
             Ok(r#"{
                 "explanation": "Lists directory contents with detailed view",
                 "risks": ["None"],
@@ -502,10 +553,10 @@ mod tests {
     async fn test_ai_analyzer_with_mocks() {
         let security = Arc::new(MockSecurityValidator);
         let ollama = Arc::new(MockOllamaClient::new());
-        let analyzer = AiAnalyzer::new(security, ollama, 100);
+        let analyzer = AiAnalyzer::new(security.clone(), ollama, 100);
 
         let command = Command::new("ls -la".to_string()).unwrap();
-        let validated = command.validate().await.unwrap();
+        let validated = security.validate_command(command).await.unwrap();
         let result = analyzer.analyze_command(validated).await;
 
         assert!(result.is_ok());
