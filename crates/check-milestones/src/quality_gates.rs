@@ -733,7 +733,28 @@ mod tests {
     /// Тестирует создание результатов Quality Gate
     #[test]
     fn test_quality_result_creation() {
-        let details = vec![
+        // Для успешного результата - все критерии должны быть успешными
+        let success_details = vec![
+            CriterionResult::success(
+                "test1".to_string(),
+                "output1".to_string(),
+                Duration::from_secs(1),
+            ),
+            CriterionResult::success(
+                "test2".to_string(),
+                "output2".to_string(),
+                Duration::from_secs(1),
+            ),
+        ];
+
+        let success_result = QualityResult::success(
+            "Test Gate".to_string(),
+            success_details,
+            Duration::from_secs(2),
+        );
+
+        // Для неуспешного результата - хотя бы один критерий должен быть неуспешным
+        let failure_details = vec![
             CriterionResult::success(
                 "test1".to_string(),
                 "output1".to_string(),
@@ -747,24 +768,30 @@ mod tests {
             ),
         ];
 
-        let success_result = QualityResult::success(
-            "Test Gate".to_string(),
-            details.clone(),
-            Duration::from_secs(2),
-        );
-
         let failed_result = QualityResult::failed(
             "Test Gate".to_string(),
-            "Failed".to_string(),
-            details,
+            "One or more criteria failed".to_string(),
+            failure_details,
             Duration::from_secs(2),
         );
 
-        assert!(success_result.passed);
-        assert!(!failed_result.passed);
+        // Проверяем успешный результат
+        assert!(
+            success_result.passed,
+            "Success result should have passed=true"
+        );
         assert_eq!(success_result.summary.total_criteria, 2);
-        assert_eq!(success_result.summary.passed_criteria, 1);
-        assert_eq!(success_result.summary.failed_criteria, 1);
+        assert_eq!(success_result.summary.passed_criteria, 2);
+        assert_eq!(success_result.summary.failed_criteria, 0);
+
+        // Проверяем неуспешный результат
+        assert!(
+            !failed_result.passed,
+            "Failed result should have passed=false"
+        );
+        assert_eq!(failed_result.summary.total_criteria, 2);
+        assert_eq!(failed_result.summary.passed_criteria, 1);
+        assert_eq!(failed_result.summary.failed_criteria, 1);
     }
 
     /// Тестирует форматирование цветного вывода

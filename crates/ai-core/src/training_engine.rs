@@ -175,6 +175,7 @@ impl TrainingDataCollector {
     }
 
     /// Анонимизация текста команды
+    /// Анонимизация текста команды
     async fn anonymize_command_text(&self, command: &str) -> Result<String, DomainError> {
         let mut anonymized = command.to_string();
 
@@ -184,18 +185,18 @@ impl TrainingDataCollector {
             anonymized = anonymized.replace(&*home_str, "~");
         }
 
+        // Замена общих путей пользователей (если не были заменены выше)
+        let user_paths_regex = regex::Regex::new(r"(/home|/Users)/[^/\s]+").unwrap();
+        anonymized = user_paths_regex.replace_all(&anonymized, "~").to_string();
+
         // Замена IP адресов
         let ip_regex = regex::Regex::new(r"\b(?:\d{1,3}\.){3}\d{1,3}\b").unwrap();
-        anonymized = ip_regex
-            .replace_all(&anonymized, "xxx.xxx.xxx.xxx")
-            .to_string();
+        anonymized = ip_regex.replace_all(&anonymized, "[IP]").to_string();
 
         // Замена email адресов
         let email_regex =
             regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap();
-        anonymized = email_regex
-            .replace_all(&anonymized, "user@example.com")
-            .to_string();
+        anonymized = email_regex.replace_all(&anonymized, "[EMAIL]").to_string();
 
         Ok(anonymized)
     }
@@ -218,6 +219,14 @@ impl TrainingDataCollector {
             let regex = regex::Regex::new(pattern).unwrap();
             anonymized = regex.replace_all(&anonymized, "[REDACTED]").to_string();
         }
+
+        // Также заменяем email и IP, как в команде
+        let ip_regex = regex::Regex::new(r"\b(?:\d{1,3}\.){3}\d{1,3}\b").unwrap();
+        anonymized = ip_regex.replace_all(&anonymized, "[IP]").to_string();
+
+        let email_regex =
+            regex::Regex::new(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b").unwrap();
+        anonymized = email_regex.replace_all(&anonymized, "[EMAIL]").to_string();
 
         Ok(anonymized)
     }

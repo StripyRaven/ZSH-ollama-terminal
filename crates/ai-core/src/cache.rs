@@ -267,12 +267,12 @@ mod tests {
         cache.put("key2".to_string(), analysis).await;
 
         // Чтения для генерации метрик
-        let _ = cache.get("key1").await;
-        let _ = cache.get("key1").await; // hit
+        let _ = cache.get("key1").await; // первый hit
+        let _ = cache.get("key1").await; // второй hit
         let _ = cache.get("key3").await; // miss
 
         let metrics = cache.metrics().await;
-        assert_eq!(metrics.hits, 1);
+        assert_eq!(metrics.hits, 2, "Expected 2 hits (two reads of key1)");
         assert_eq!(metrics.misses, 1);
         assert!(metrics.hit_rate > 0.0);
     }

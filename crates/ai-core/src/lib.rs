@@ -40,8 +40,10 @@ pub struct AiAnalyzer<G = ollama_client::OllamaClient>
 where
     G: CompletionGenerator,
 {
+    #[allow(dead_code)] // Будет использоваться в будущем
     security: Arc<dyn SecurityValidator>,
     ollama: Arc<G>,
+    #[allow(dead_code)] // Будет использоваться в будущем
     cache: tokio::sync::Mutex<LruCache<String, Arc<Command<Analyzed>>>>,
     hallucination_detector: HallucinationDetector,
     performance_monitor: PerformanceMonitor,
@@ -62,6 +64,8 @@ where
     }
 
     /// Анализ команды с кэшированием и fallback механизмами
+
+    #[allow(dead_code)]
     async fn analyze_command_with_fallback_arc(
         &self,
         command: Command<Validated>,
@@ -523,6 +527,7 @@ mod tests {
             Self
         }
 
+        #[allow(dead_code)]
         pub async fn generate_completion(&self, _prompt: String) -> Result<String, DomainError> {
             Ok(r#"{
                 "explanation": "Lists directory contents with detailed view",
