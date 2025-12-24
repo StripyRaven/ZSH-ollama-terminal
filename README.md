@@ -10,3 +10,4 @@
 
 ```bash
 cargo build --workspace
+```

@@ -7,3 +7,4 @@ Cargo.lock
 *.db
 .env
 dist/
+target

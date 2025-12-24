@@ -20,6 +20,7 @@ use std::fmt;
 ///     constraints: vec!["no destructive commands".to_string()],
 /// }.into();
 /// ```
+///TODO: выглядит так что необходимо создать кркйт специфичные ошибки
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DomainError {
     /// Ошибка валидации входных данных
