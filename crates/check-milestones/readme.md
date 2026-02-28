@@ -1,4 +1,4 @@
-# [Check Milestones 🚀](zsh-ollama-terminal/crates/check-milestones/README.md)
+# Check Milestones 🚀
 
 ## Система Quality Gates и отслеживания вех для проекта zsh-ollama-terminal
 
@@ -142,9 +142,9 @@ cargo run -p check-milestones -- info 2 --output json    # В формате JSO
 ### Флаги командной строки
 
 | Флаг | Описание | Пример |
-|------|-----------|---------|
+| --- | --------- | ------ |
 | `--verbose` / `-v` | Подробный вывод | `--verbose` |
-| `--output` / `-o` | Формат вывода: `text`, `json`, `markdown` | `--output json`|
+| `--output` / `-o` | Формат вывода: `text`, `json`, `markdown` | `--output json` |
 | `--help` / `-h` | Справка по командам | `--help` |
 
 ### Использование как библиотеки
