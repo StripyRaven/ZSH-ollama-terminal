@@ -144,7 +144,7 @@ cargo run -p check-milestones -- info 2 --output json    # В формате JSO
 | Флаг | Описание | Пример |
 | --- | --------- | ------ |
 | `--verbose` / `-v` | Подробный вывод | `--verbose` |
-| `--output` / `-o` | Формат вывода: `text`, `json`, `markdown` | `--output json` |
+| `--output` / `-o` | Формат вывода: `text, json, markdown` | `--output json` |
 | `--help` / `-h` | Справка по командам | `--help` |
 
 ### Использование как библиотеки
