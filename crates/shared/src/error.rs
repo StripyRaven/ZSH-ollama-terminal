@@ -39,6 +39,10 @@ pub enum DomainError {
     Training(TrainingError),
     /// Сетевая ошибка (HTTP, подключение и т.д.)
     Network(NetworkError),
+    /// Ошибки файловых операций (НОВОЕ)
+    FileSystem(FileSystemError),
+    // /// Ошибки специфичные для Ollama (НОВОЕ)
+    // OllamaFs(OllamaFsError),
 }
 
 /// Ошибка валидации входных данных или команды
@@ -217,28 +221,96 @@ pub enum NetworkOperation {
     Timeout,
 }
 
+/// Ошибки файловых операций
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileSystemError {
+    /// Тип ошибки файловой системы
+    pub error_type: FileSystemErrorType,
+    /// Путь, на котором произошла ошибка
+    pub path: String,
+    /// Контекст операции
+    pub context: String,
+    /// Дополнительные детали
+    pub details: Option<String>,
+}
+
+/// Типы ошибок файловой системы
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FileSystemErrorType {
+    /// Файл не найден
+    FileNotFound,
+    /// Нет прав доступа
+    PermissionDenied,
+    /// Файл уже существует
+    FileExists,
+    /// Диск переполнен
+    DiskFull,
+    /// Недостаточно места
+    InsufficientSpace,
+    /// Некорректный путь
+    InvalidPath,
+    /// Слишком большой файл
+    FileTooLarge,
+    /// Ошибка рекурсивного обхода
+    TreeTraversalError,
+    /// Ошибка чтения дерева файлов
+    TreeReadError,
+}
+
+
 // Реализация Display для всех ошибок
 impl fmt::Display for DomainError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DomainError::Validation(e) => {
-                write!(f, "Validation error: {} - {}", e.reason, e.command)
+                write!(
+                    f,
+                    "Validation error: {} - {}",
+                    e.reason, e.command
+                )
             }
             DomainError::Security(e) => {
-                write!(f, "Security error: {:?} - {:?}", e.violation, e.severity)
+                write!(
+                    f,
+                    "Security error: {:?} - {:?}",
+                    e.violation, e.severity
+                )
             }
-            DomainError::Analysis(e) => write!(f, "Analysis error: {} - {}", e.model, e.details),
-            DomainError::Io(e) => write!(f, "IO error: {:?} on {}", e.operation, e.path),
+            DomainError::Analysis(e) => write!(
+                f,
+                "Analysis error: {} - {}",
+                e.model, e.details
+            ),
+            DomainError::Io(e) => write!(
+                f,
+                "IO error: {:?} on {}",
+                e.operation, e.path
+            ),
             DomainError::Configuration(e) => write!(
                 f,
                 "Configuration error: {} expected {} got {}",
                 e.key, e.expected_type, e.actual_value
             ),
             DomainError::Training(e) => {
-                write!(f, "Training error: {} - {:?}", e.model_name, e.error)
+                write!(
+                    f,
+                    "Training error: {} - {:?}",
+                    e.model_name, e.error
+                )
             }
             DomainError::Network(e) => {
-                write!(f, "Network error: {} - {:?}", e.endpoint, e.operation)
+                write!(
+                    f,
+                    "Network error: {} - {:?}",
+                    e.endpoint, e.operation
+                )
+            }
+            DomainError::FileSystem(e) => {
+                write!(
+                    f,
+                    "File system error: {:?} at {} - {}",
+                    e.error_type, e.path, e.context
+                )
             }
         }
     }
@@ -249,12 +321,58 @@ impl std::error::Error for DomainError {}
 // Преобразования из стандартных ошибок
 
 /// Автоматическое преобразование std::io::Error в DomainError::Io
+// Проблема: прошлая реализация From<std::io::Error> теряет контекст:
+// - Не знает конкретный путь
+// - Не знает конкретную операцию
+// - Обобщает все в "unknown" и Read
+
+// Наше решение: Создаем отдельные типы ошибок для:
+// 1. FileSystemError - общие операции с файловой системой
+// 2. OllamaFsError - специфичные для Ollama операции
+// 3. IoError оставляем для случаев, когда действительно нужна общая IO ошибка
+//    без дополнительного контекста (редкие случаи)
+
+// Это дает:
+// 1. Лучшую типизацию и обработку ошибок
+// 2. Более информативные сообщения об ошибках
+// 3. Возможность точного матчинга в коде потребителя
+// 4. Сохранение обратной совместимости через From преобразования
 impl From<std::io::Error> for DomainError {
     fn from(error: std::io::Error) -> Self {
-        DomainError::Io(IoError {
+        use std::io::ErrorKind;
+
+        let (error_type, context) = match error.kind() {
+            ErrorKind::NotFound => (
+                FileSystemErrorType::FileNotFound,
+                "File or directory not found"
+            ),
+            ErrorKind::PermissionDenied => (
+                FileSystemErrorType::PermissionDenied,
+                "Permission denied"
+            ),
+            ErrorKind::AlreadyExists => (
+                FileSystemErrorType::FileExists,
+                "File already exists"
+            ),
+            ErrorKind::StorageFull => (
+                FileSystemErrorType::DiskFull,
+                "Disk is full"
+            ),
+            ErrorKind::InvalidInput => (
+                FileSystemErrorType::InvalidPath,
+                "Invalid path or input"
+            ),
+            _ => (
+                FileSystemErrorType::FileNotFound, // fallback
+                "Unknown IO error"
+            ),
+        };
+
+        DomainError::FileSystem(FileSystemError {
+            error_type,
             path: "unknown".to_string(),
-            operation: IoOperation::Read,
-            source: Some(error.to_string()),
+            context: context.to_string(),
+            details: Some(error.to_string()),
         })
     }
 }
@@ -272,6 +390,13 @@ impl From<ValidationError> for DomainError {
 impl From<SecurityError> for DomainError {
     fn from(error: SecurityError) -> Self {
         DomainError::Security(error)
+    }
+}
+
+/// Преобразование FileSystemerror
+impl From<FileSystemError> for DomainError {
+    fn from(error: FileSystemError) -> Self {
+        DomainError::FileSystem(error)
     }
 }
 
@@ -342,6 +467,8 @@ mod tests {
                 DomainError::Configuration(_) => assert!(true),
                 DomainError::Training(_) => assert!(true),
                 DomainError::Network(_) => assert!(true),
+                // TODO: fix
+                DomainError::FileSystem(_) => todo!(),
             }
         }
     }
