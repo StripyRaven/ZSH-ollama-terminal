@@ -445,6 +445,13 @@ impl From<FileSystemError> for DomainError {
     }
 }
 
+///Преодразование OllamaFsError
+impl From<OllamaFsError> for DomainError {
+    fn from(error: OllamaFsError) -> Self {
+        DomainError::OllamaFs(error)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
