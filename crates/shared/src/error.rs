@@ -455,6 +455,7 @@ mod tests {
                 operation: NetworkOperation::Request,
                 status_code: None,
             }),
+            // TODO:тест для FileSystem
         ];
 
         // Компилятор гарантирует, что мы обработали все варианты
@@ -467,8 +468,7 @@ mod tests {
                 DomainError::Configuration(_) => assert!(true),
                 DomainError::Training(_) => assert!(true),
                 DomainError::Network(_) => assert!(true),
-                // TODO: fix
-                DomainError::FileSystem(_) => todo!(),
+                DomainError::FileSystem(_) => assert!(true),
             }
         }
     }
