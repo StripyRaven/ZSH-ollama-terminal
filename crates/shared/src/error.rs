@@ -1,6 +1,8 @@
 //! crates/shared/src/error.rs
 //! # Comprehensive Error System with Exhaustive Matching
 //! Полная система ошибок с гарантированной обработкой всех вариантов.
+//! ver 1.0.1
+//! NOTE: до этого комита не версионировалось
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
