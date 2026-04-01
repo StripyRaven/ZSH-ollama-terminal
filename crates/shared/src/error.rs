@@ -39,10 +39,10 @@ pub enum DomainError {
     Training(TrainingError),
     /// Сетевая ошибка (HTTP, подключение и т.д.)
     Network(NetworkError),
-    /// Ошибки файловых операций (НОВОЕ)
+    /// Ошибки файловых операций
     FileSystem(FileSystemError),
-    // /// Ошибки специфичные для Ollama (НОВОЕ)
-    // OllamaFs(OllamaFsError),
+    /// Ошибки специфичные для Ollama
+    OllamaFs(OllamaFsError),
 }
 
 /// Ошибка валидации входных данных или команды
@@ -257,6 +257,36 @@ pub enum FileSystemErrorType {
     TreeReadError,
 }
 
+/// Ошибки специфичные для Ollama файловой системы
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaFsError {
+    /// Тип ошибки Ollama
+    pub error_type: OllamaFsErrorType,
+    /// Имя модели (если применимо)
+    pub model_name: Option<String>,
+    /// Путь в хранилище Ollama
+    pub ollama_path: String,
+    /// Контекст операции
+    pub context: String,
+}
+
+/// Типы ошибок Ollama файловой системы
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum OllamaFsErrorType {
+    /// Модель не найдена локально
+    ModelNotFound,
+    /// Некорректная структура хранилища Ollama
+    InvalidOllamaStructure,
+    /// Поврежденный файл модели
+    CorruptedModelFile,
+    /// Некорректный Modelfile
+    InvalidModelfile,
+    /// Конфликт версий модели
+    ModelVersionConflict,
+    /// Недостаточно места для модели
+    InsufficientSpaceForModel,
+}
+
 
 // Реализация Display для всех ошибок
 impl fmt::Display for DomainError {
@@ -311,6 +341,21 @@ impl fmt::Display for DomainError {
                     "File system error: {:?} at {} - {}",
                     e.error_type, e.path, e.context
                 )
+            }
+            DomainError::OllamaFs(e) => {
+                if let Some(model) = &e.model_name {
+                    write!(
+                        f,
+                        "Ollama filesystem error for model '{}': {:?} - {}",
+                        model, e.error_type, e.context
+                    )
+                } else {
+                    write!(
+                        f,
+                        "Ollama filesystem error: {:?} at {} - {}",
+                        e.error_type, e.ollama_path, e.context
+                    )
+                }
             }
         }
     }
@@ -469,6 +514,7 @@ mod tests {
                 DomainError::Training(_) => assert!(true),
                 DomainError::Network(_) => assert!(true),
                 DomainError::FileSystem(_) => assert!(true),
+                DomainError::OllamaFs(_) => assert!(true),
             }
         }
     }
