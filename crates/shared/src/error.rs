@@ -287,53 +287,28 @@ pub enum OllamaFsErrorType {
     InsufficientSpaceForModel,
 }
 
-
 // Реализация Display для всех ошибок
 impl fmt::Display for DomainError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             DomainError::Validation(e) => {
-                write!(
-                    f,
-                    "Validation error: {} - {}",
-                    e.reason, e.command
-                )
+                write!(f, "Validation error: {} - {}", e.reason, e.command)
             }
             DomainError::Security(e) => {
-                write!(
-                    f,
-                    "Security error: {:?} - {:?}",
-                    e.violation, e.severity
-                )
+                write!(f, "Security error: {:?} - {:?}", e.violation, e.severity)
             }
-            DomainError::Analysis(e) => write!(
-                f,
-                "Analysis error: {} - {}",
-                e.model, e.details
-            ),
-            DomainError::Io(e) => write!(
-                f,
-                "IO error: {:?} on {}",
-                e.operation, e.path
-            ),
+            DomainError::Analysis(e) => write!(f, "Analysis error: {} - {}", e.model, e.details),
+            DomainError::Io(e) => write!(f, "IO error: {:?} on {}", e.operation, e.path),
             DomainError::Configuration(e) => write!(
                 f,
                 "Configuration error: {} expected {} got {}",
                 e.key, e.expected_type, e.actual_value
             ),
             DomainError::Training(e) => {
-                write!(
-                    f,
-                    "Training error: {} - {:?}",
-                    e.model_name, e.error
-                )
+                write!(f, "Training error: {} - {:?}", e.model_name, e.error)
             }
             DomainError::Network(e) => {
-                write!(
-                    f,
-                    "Network error: {} - {:?}",
-                    e.endpoint, e.operation
-                )
+                write!(f, "Network error: {} - {:?}", e.endpoint, e.operation)
             }
             DomainError::FileSystem(e) => {
                 write!(
@@ -389,27 +364,17 @@ impl From<std::io::Error> for DomainError {
         let (error_type, context) = match error.kind() {
             ErrorKind::NotFound => (
                 FileSystemErrorType::FileNotFound,
-                "File or directory not found"
+                "File or directory not found",
             ),
-            ErrorKind::PermissionDenied => (
-                FileSystemErrorType::PermissionDenied,
-                "Permission denied"
-            ),
-            ErrorKind::AlreadyExists => (
-                FileSystemErrorType::FileExists,
-                "File already exists"
-            ),
-            ErrorKind::StorageFull => (
-                FileSystemErrorType::DiskFull,
-                "Disk is full"
-            ),
-            ErrorKind::InvalidInput => (
-                FileSystemErrorType::InvalidPath,
-                "Invalid path or input"
-            ),
+            ErrorKind::PermissionDenied => {
+                (FileSystemErrorType::PermissionDenied, "Permission denied")
+            }
+            ErrorKind::AlreadyExists => (FileSystemErrorType::FileExists, "File already exists"),
+            ErrorKind::StorageFull => (FileSystemErrorType::DiskFull, "Disk is full"),
+            ErrorKind::InvalidInput => (FileSystemErrorType::InvalidPath, "Invalid path or input"),
             _ => (
                 FileSystemErrorType::FileNotFound, // fallback
-                "Unknown IO error"
+                "Unknown IO error",
             ),
         };
 
