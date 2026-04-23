@@ -1,11 +1,27 @@
 //! crates/shared/src/error.rs
 //! # Comprehensive Error System with Exhaustive Matching
 //! Полная система ошибок с гарантированной обработкой всех вариантов.
-//! ver 1.0.2
-//! NOTE: добавлен OllamaFsError
+//! ver 1.1.0
+//! NOTE: оптимизирован с использованием thiserror, макроса impl_from, объединены IoError и FileSystemError
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::io;
+use thiserror::Error;
+
+// ==== Макрос для автоматической реализации From<SpecificError> ==========
+/// Генерирует impl From<SpecificError> for DomainError.
+/// Используется для всех вариантов, кроме тех, что требуют специальной логики.
+#[macro_export]
+macro_rules! impl_from {
+    ($error_type:ty, $variant:ident) => {
+        impl From<$error_type> for DomainError {
+            fn from(err: $error_type) -> Self {
+                DomainError::$variant(err)
+            }
+        }
+    };
+}
 
 /// Иерархия ошибок домена с exhaustive matching гарантиями
 ///
@@ -23,30 +39,39 @@ use std::fmt;
 /// }.into();
 /// ```
 // TODO: выглядит так что необходимо создать кркйт специфичные ошибки
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Error)]
 pub enum DomainError {
     /// Ошибка валидации входных данных
+    #[error("Validation error: {0}")]
     Validation(ValidationError),
     /// Ошибка безопасности (нарушение политик)
+    #[error("Security error: {0}")]
     Security(SecurityError),
     /// Ошибка AI-анализа команды
+    #[error("Analysis error: {0}")]
     Analysis(AnalysisError),
-    /// Ошибка ввода-вывода
-    Io(IoError),
+    // /// Ошибка ввода-вывода
+    // Io(IoError),
+    /// Ошибка файловой системы – замена ранее существовавшей IoError
+    #[error("Filesystem error: {0}")]
+    FileSystem(FileSystemError),
     /// Ошибка конфигурации системы
+    #[error("Configuration error: {0}")]
     Configuration(ConfigurationError),
     /// Ошибка обучения модели
+    #[error("Trainig error: {0}")]
     Training(TrainingError),
     /// Сетевая ошибка (HTTP, подключение и т.д.)
+    #[error("Network error: {0}")]
     Network(NetworkError),
-    /// Ошибки файловых операций
-    FileSystem(FileSystemError),
     /// Ошибки специфичные для Ollama
+    #[error("Ollame fs error")]
     OllamaFs(OllamaFsError),
 }
 
 /// Ошибка валидации входных данных или команды
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Error)]
+#[error("{reason} - command: {command}")]
 pub struct ValidationError {
     /// Человекочитаемое описание ошибки
     pub reason: String,
@@ -59,7 +84,8 @@ pub struct ValidationError {
 }
 
 /// Ошибка безопасности, возникает при нарушении политик безопасности
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Error)]
+#[error("Security violation: {violation:?} ({severity:?}) in {context}")]
 pub struct SecurityError {
     /// Тип нарушения безопасности
     pub violation: SecurityViolation,
@@ -98,7 +124,8 @@ pub enum SecuritySeverity {
 }
 
 /// Контекст безопасности для аудита и логгирования
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Error)]
+#[error("user {user_id} in {working_directory} attempted {attempted_operation}")]
 pub struct SecurityContext {
     /// Идентификатор пользователя
     pub user_id: u32,
@@ -109,7 +136,8 @@ pub struct SecurityContext {
 }
 
 /// Ошибка анализа AI модели
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Error)]
+#[error("model {model}: {error_type:?} - {details}")]
 pub struct AnalysisError {
     /// Имя модели, которая вызвала ошибку
     pub model: String,
@@ -137,15 +165,15 @@ pub enum AnalysisErrorType {
 }
 
 /// Ошибка ввода-вывода с файловой системой
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct IoError {
-    /// Путь к файлу или директории
-    pub path: String,
-    /// Операция, вызвавшая ошибку
-    pub operation: IoOperation,
-    /// Исходная ошибка (если доступна)
-    pub source: Option<String>,
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct IoError {
+//     /// Путь к файлу или директории
+//     pub path: String,
+//     /// Операция, вызвавшая ошибку
+//     pub operation: IoOperation,
+//     /// Исходная ошибка (если доступна)
+//     pub source: Option<String>,
+// }
 
 /// Типы операций ввода-вывода
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,10 +188,13 @@ pub enum IoOperation {
     List,
     /// Получение метаданных
     Metadata,
+    // добавлен для неизвестных операций
+    Other(String),
 }
 
 /// Ошибка конфигурации системы
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Error)]
+#[error("config {key}: expected {expected_type}, got {actual_value}")]
 pub struct ConfigurationError {
     /// Ключ конфигурации
     pub key: String,
@@ -174,7 +205,8 @@ pub struct ConfigurationError {
 }
 
 /// Ошибка обучения модели машинного обучения
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Error)]
+#[error("training {model_name} (size={training_data_size}): {error:?}")]
 pub struct TrainingError {
     /// Имя модели
     pub model_name: String,
@@ -198,7 +230,8 @@ pub enum TrainingErrorType {
 }
 
 /// Сетевая ошибка (HTTP, WebSocket и т.д.)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Error)]
+#[error("network {operation:?} on {endpoint}")]
 pub struct NetworkError {
     /// Конечная точка (URL)
     pub endpoint: String,
@@ -221,17 +254,16 @@ pub enum NetworkOperation {
     Timeout,
 }
 
-/// Ошибки файловых операций
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Объединённая ошибка файловой системы (ранее IoError + FileSystemError)
+#[derive(Debug, Clone, Serialize, Deserialize, Error)]
+#[error("{error_type:?} on {path} during {operation:?}: {context}")]
 pub struct FileSystemError {
-    /// Тип ошибки файловой системы
     pub error_type: FileSystemErrorType,
-    /// Путь, на котором произошла ошибка
     pub path: String,
-    /// Контекст операции
+    pub operation: IoOperation, // перенесено из IoError
     pub context: String,
-    /// Дополнительные детали
-    pub details: Option<String>,
+    /// Дополнительные детали ошибки (например, исходный текст IO-ошибки)
+    pub detailed_message: Option<String>,
 }
 
 /// Типы ошибок файловой системы
@@ -258,7 +290,8 @@ pub enum FileSystemErrorType {
 }
 
 /// Ошибки специфичные для Ollama файловой системы
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Error)]
+#[error("OllamaFS {error_type:?} at {ollama_path}: {context}")]
 pub struct OllamaFsError {
     /// Тип ошибки Ollama
     pub error_type: OllamaFsErrorType,
@@ -288,55 +321,55 @@ pub enum OllamaFsErrorType {
 }
 
 // Реализация Display для всех ошибок
-impl fmt::Display for DomainError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            DomainError::Validation(e) => {
-                write!(f, "Validation error: {} - {}", e.reason, e.command)
-            }
-            DomainError::Security(e) => {
-                write!(f, "Security error: {:?} - {:?}", e.violation, e.severity)
-            }
-            DomainError::Analysis(e) => write!(f, "Analysis error: {} - {}", e.model, e.details),
-            DomainError::Io(e) => write!(f, "IO error: {:?} on {}", e.operation, e.path),
-            DomainError::Configuration(e) => write!(
-                f,
-                "Configuration error: {} expected {} got {}",
-                e.key, e.expected_type, e.actual_value
-            ),
-            DomainError::Training(e) => {
-                write!(f, "Training error: {} - {:?}", e.model_name, e.error)
-            }
-            DomainError::Network(e) => {
-                write!(f, "Network error: {} - {:?}", e.endpoint, e.operation)
-            }
-            DomainError::FileSystem(e) => {
-                write!(
-                    f,
-                    "File system error: {:?} at {} - {}",
-                    e.error_type, e.path, e.context
-                )
-            }
-            DomainError::OllamaFs(e) => {
-                if let Some(model) = &e.model_name {
-                    write!(
-                        f,
-                        "Ollama filesystem error for model '{}': {:?} - {}",
-                        model, e.error_type, e.context
-                    )
-                } else {
-                    write!(
-                        f,
-                        "Ollama filesystem error: {:?} at {} - {}",
-                        e.error_type, e.ollama_path, e.context
-                    )
-                }
-            }
-        }
-    }
-}
+// impl fmt::Display for DomainError {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             DomainError::Validation(e) => {
+//                 write!(f, "Validation error: {} - {}", e.reason, e.command)
+//             }
+//             DomainError::Security(e) => {
+//                 write!(f, "Security error: {:?} - {:?}", e.violation, e.severity)
+//             }
+//             DomainError::Analysis(e) => write!(f, "Analysis error: {} - {}", e.model, e.details),
+//             DomainError::Io(e) => write!(f, "IO error: {:?} on {}", e.operation, e.path),
+//             DomainError::Configuration(e) => write!(
+//                 f,
+//                 "Configuration error: {} expected {} got {}",
+//                 e.key, e.expected_type, e.actual_value
+//             ),
+//             DomainError::Training(e) => {
+//                 write!(f, "Training error: {} - {:?}", e.model_name, e.error)
+//             }
+//             DomainError::Network(e) => {
+//                 write!(f, "Network error: {} - {:?}", e.endpoint, e.operation)
+//             }
+//             DomainError::FileSystem(e) => {
+//                 write!(
+//                     f,
+//                     "File system error: {:?} at {} - {}",
+//                     e.error_type, e.path, e.context
+//                 )
+//             }
+//             DomainError::OllamaFs(e) => {
+//                 if let Some(model) = &e.model_name {
+//                     write!(
+//                         f,
+//                         "Ollama filesystem error for model '{}': {:?} - {}",
+//                         model, e.error_type, e.context
+//                     )
+//                 } else {
+//                     write!(
+//                         f,
+//                         "Ollama filesystem error: {:?} at {} - {}",
+//                         e.error_type, e.ollama_path, e.context
+//                     )
+//                 }
+//             }
+//         }
+//     }
+//}
 
-impl std::error::Error for DomainError {}
+// impl std::error::Error for DomainError {}
 
 // Преобразования из стандартных ошибок
 
@@ -381,8 +414,9 @@ impl From<std::io::Error> for DomainError {
         DomainError::FileSystem(FileSystemError {
             error_type,
             path: "unknown".to_string(),
+            operation: IoOperation::Other("TO DO defined".to_string()),
             context: context.to_string(),
-            details: Some(error.to_string()),
+            detailed_message: Some(error.to_string()),
         })
     }
 }
@@ -416,6 +450,11 @@ impl From<OllamaFsError> for DomainError {
         DomainError::OllamaFs(error)
     }
 }
+
+// ======= Обратная совместимость для кода, использующего старый IoError =======
+// Удаляем структуру IoError, но для предотвращения поломок оставляем type alias (deprecated)
+#[deprecated(note = "Use FileSystemError instead")]
+pub type IoError = FileSystemError;
 
 #[cfg(test)]
 mod tests {
@@ -452,11 +491,11 @@ mod tests {
                 details: "test".to_string(),
                 suggestion: None,
             }),
-            DomainError::Io(IoError {
-                path: "test".to_string(),
-                operation: IoOperation::Read,
-                source: None,
-            }),
+            // DomainError::Io(IoError {
+            //     path: "test".to_string(),
+            //     operation: IoOperation::Read,
+            //     //source: None,
+            // }),
             DomainError::Configuration(ConfigurationError {
                 key: "test".to_string(),
                 expected_type: "string".to_string(),
@@ -481,7 +520,7 @@ mod tests {
                 DomainError::Validation(_) => assert!(true),
                 DomainError::Security(_) => assert!(true),
                 DomainError::Analysis(_) => assert!(true),
-                DomainError::Io(_) => assert!(true),
+                // DomainError::Io(_) => assert!(true),
                 DomainError::Configuration(_) => assert!(true),
                 DomainError::Training(_) => assert!(true),
                 DomainError::Network(_) => assert!(true),

@@ -8,7 +8,7 @@ pub mod states;
 pub mod traits;
 
 // Re-export для удобства использования
-pub use error::DomainError;
+pub use error::{DomainError, FileSystemError, FileSystemErrorType, IoOperation};
 pub use serialization::SerializedCommand;
 pub use states::*;
 pub use traits::*;
@@ -131,10 +131,13 @@ impl Command<states::Unvalidated> {
         }
 
         let current_dir = std::env::current_dir().map_err(|e| {
-            DomainError::Io(error::IoError {
+            // TODO:по сути это мокап для отладки error.rs код не верный
+            DomainError::FileSystem(error::FileSystemError {
+                error_type: error::FileSystemErrorType::InvalidPath,
                 path: ".".to_string(),
                 operation: error::IoOperation::Read,
-                source: Some(e.to_string()),
+                context: (e).to_string(),
+                detailed_message: Some(e.to_string()),
             })
         })?;
 
