@@ -1,6 +1,7 @@
 //! crates/shared/src/lib.rs
 //! # Shared Types and Traits with Compile-Time Guarantees
 //! Общие типы, трейты и системы ошибок для всей архитектуры.
+//! ver 1.0.1
 
 pub mod error;
 pub mod serialization;

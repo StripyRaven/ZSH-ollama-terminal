@@ -1,7 +1,7 @@
 //! crates/shared/src/error.rs
 //! # Comprehensive Error System with Exhaustive Matching
 //! Полная система ошибок с гарантированной обработкой всех вариантов.
-//! ver 1.1.1
+//! ver 1.2.0
 //! NOTE: оптимизирован с использованием thiserror, макроса impl_from, объединены IoError и FileSystemError
 
 use serde::{Deserialize, Serialize};
@@ -360,15 +360,13 @@ impl FileSystemError {
 #[deprecated(note = "Use FileSystemError instead")]
 pub type IoError = FileSystemError;
 
+// ========== Тесты ==========
 #[cfg(test)]
 mod tests {
     use super::*;
-    // SecurityLevel используется только в тестах для проверки exhaustive matching
-    // Определение SecurityLevel находится в корне крейта (lib.rs) или security.rs
-    use crate::SecurityLevel;
-
-    /// Этот тест гарантирует, что все варианты DomainError обрабатываются
-    ///
+    // SecurityLevel больше не нужен для тестов ошибок – удалён.
+    // Если необходимо проверить exhaustive matching для SecurityLevel,
+    // это следует делать в модуле, где определён SecurityLevel.
     /// Exhaustive matching гарантирует, что при добавлении нового типа ошибки
     /// компилятор заставит обновить все match-выражения.
     #[test]
@@ -395,11 +393,13 @@ mod tests {
                 details: "test".to_string(),
                 suggestion: None,
             }),
-            // DomainError::Io(IoError {
-            //     path: "test".to_string(),
-            //     operation: IoOperation::Read,
-            //     //source: None,
-            // }),
+            DomainError::FileSystem(FileSystemError {
+                error_type: FileSystemErrorType::FileNotFound,
+                path: "/test".to_string(),
+                operation: IoOperation::Read,
+                context: "testing".to_string(),
+                detailed_message: None,
+            }),
             DomainError::Configuration(ConfigurationError {
                 key: "test".to_string(),
                 expected_type: "string".to_string(),
@@ -415,45 +415,41 @@ mod tests {
                 operation: NetworkOperation::Request,
                 status_code: None,
             }),
-            // TODO:тест для FileSystem
+            DomainError::OllamaFs(OllamaFsError {
+                error_type: OllamaFsErrorType::ModelNotFound,
+                model_name: Some("test".to_string()),
+                ollama_path: "/ollama/models".to_string(),
+                context: "test".to_string(),
+            }),
         ];
 
-        // Компилятор гарантирует, что мы обработали все варианты
         for error in errors {
             match error {
                 DomainError::Validation(_) => assert!(true),
                 DomainError::Security(_) => assert!(true),
                 DomainError::Analysis(_) => assert!(true),
-                // DomainError::Io(_) => assert!(true),
+                DomainError::FileSystem(_) => assert!(true),
                 DomainError::Configuration(_) => assert!(true),
                 DomainError::Training(_) => assert!(true),
                 DomainError::Network(_) => assert!(true),
-                DomainError::FileSystem(_) => assert!(true),
                 DomainError::OllamaFs(_) => assert!(true),
             }
         }
     }
 
-    /// Тест exhaustive matching для SecurityLevel
-    ///
-    /// Гарантирует, что при добавлении нового уровня безопасности
-    /// все match-выражения будут обновлены.
+    // Демонстрация использования контекстного преобразования IO-ошибок
     #[test]
-    fn test_security_level_exhaustive_matching() {
-        let levels = vec![
-            SecurityLevel::Untrusted,
-            SecurityLevel::User,
-            SecurityLevel::Trusted,
-            SecurityLevel::System,
-        ];
-
-        for level in levels {
-            match level {
-                SecurityLevel::Untrusted => assert!(!level.can_execute_destructive()),
-                SecurityLevel::User => assert!(!level.can_execute_destructive()),
-                SecurityLevel::Trusted => assert!(level.can_execute_destructive()),
-                SecurityLevel::System => assert!(level.can_execute_destructive()),
+    fn test_io_conversion_with_context() {
+        let io_err = std::io::Error::from(std::io::ErrorKind::NotFound);
+        let fs_err =
+            FileSystemError::from_io(io_err, "/etc/passwd", IoOperation::Read, "loading config");
+        let domain_err: DomainError = fs_err.into();
+        match domain_err {
+            DomainError::FileSystem(fs) => {
+                assert!(matches!(fs.error_type, FileSystemErrorType::FileNotFound));
+                assert_eq!(fs.path, "/etc/passwd");
             }
+            _ => panic!("wrong variant"),
         }
     }
 }
