@@ -1,11 +1,11 @@
 //! crates/shared/src/error.rs
 //! # Comprehensive Error System with Exhaustive Matching
 //! Полная система ошибок с гарантированной обработкой всех вариантов.
-//! ver 1.1.0
+//! ver 1.1.1
 //! NOTE: оптимизирован с использованием thiserror, макроса impl_from, объединены IoError и FileSystemError
 
 use serde::{Deserialize, Serialize};
-use std::fmt;
+// use std::fmt;
 use std::io;
 use thiserror::Error;
 
@@ -38,7 +38,6 @@ macro_rules! impl_from {
 ///     constraints: vec!["no destructive commands".to_string()],
 /// }.into();
 /// ```
-// TODO: выглядит так что необходимо создать кркйт специфичные ошибки
 #[derive(Debug, Clone, Serialize, Deserialize, Error)]
 pub enum DomainError {
     /// Ошибка валидации входных данных
@@ -50,8 +49,6 @@ pub enum DomainError {
     /// Ошибка AI-анализа команды
     #[error("Analysis error: {0}")]
     Analysis(AnalysisError),
-    // /// Ошибка ввода-вывода
-    // Io(IoError),
     /// Ошибка файловой системы – замена ранее существовавшей IoError
     #[error("Filesystem error: {0}")]
     FileSystem(FileSystemError),
@@ -68,6 +65,8 @@ pub enum DomainError {
     #[error("Ollame fs error")]
     OllamaFs(OllamaFsError),
 }
+
+// ========== Детальные ошибки ==========
 
 /// Ошибка валидации входных данных или команды
 #[derive(Debug, Clone, Serialize, Deserialize, Error)]
@@ -163,17 +162,6 @@ pub enum AnalysisErrorType {
     /// Слишком низкая уверенность модели
     ConfidenceTooLow,
 }
-
-/// Ошибка ввода-вывода с файловой системой
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct IoError {
-//     /// Путь к файлу или директории
-//     pub path: String,
-//     /// Операция, вызвавшая ошибку
-//     pub operation: IoOperation,
-//     /// Исходная ошибка (если доступна)
-//     pub source: Option<String>,
-// }
 
 /// Типы операций ввода-вывода
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -287,6 +275,8 @@ pub enum FileSystemErrorType {
     TreeTraversalError,
     /// Ошибка чтения дерева файлов
     TreeReadError,
+    /// Универсальный вариант
+    Other,
 }
 
 /// Ошибки специфичные для Ollama файловой системы
@@ -320,137 +310,51 @@ pub enum OllamaFsErrorType {
     InsufficientSpaceForModel,
 }
 
-// Реализация Display для всех ошибок
-// impl fmt::Display for DomainError {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         match self {
-//             DomainError::Validation(e) => {
-//                 write!(f, "Validation error: {} - {}", e.reason, e.command)
-//             }
-//             DomainError::Security(e) => {
-//                 write!(f, "Security error: {:?} - {:?}", e.violation, e.severity)
-//             }
-//             DomainError::Analysis(e) => write!(f, "Analysis error: {} - {}", e.model, e.details),
-//             DomainError::Io(e) => write!(f, "IO error: {:?} on {}", e.operation, e.path),
-//             DomainError::Configuration(e) => write!(
-//                 f,
-//                 "Configuration error: {} expected {} got {}",
-//                 e.key, e.expected_type, e.actual_value
-//             ),
-//             DomainError::Training(e) => {
-//                 write!(f, "Training error: {} - {:?}", e.model_name, e.error)
-//             }
-//             DomainError::Network(e) => {
-//                 write!(f, "Network error: {} - {:?}", e.endpoint, e.operation)
-//             }
-//             DomainError::FileSystem(e) => {
-//                 write!(
-//                     f,
-//                     "File system error: {:?} at {} - {}",
-//                     e.error_type, e.path, e.context
-//                 )
-//             }
-//             DomainError::OllamaFs(e) => {
-//                 if let Some(model) = &e.model_name {
-//                     write!(
-//                         f,
-//                         "Ollama filesystem error for model '{}': {:?} - {}",
-//                         model, e.error_type, e.context
-//                     )
-//                 } else {
-//                     write!(
-//                         f,
-//                         "Ollama filesystem error: {:?} at {} - {}",
-//                         e.error_type, e.ollama_path, e.context
-//                     )
-//                 }
-//             }
-//         }
-//     }
-//}
-
-// impl std::error::Error for DomainError {}
-
 // Преобразования из стандартных ошибок
 
-/// Автоматическое преобразование std::io::Error в DomainError::Io
-// Проблема: прошлая реализация From<std::io::Error> теряет контекст:
-// - Не знает конкретный путь
-// - Не знает конкретную операцию
-// - Обобщает все в "unknown" и Read
+// ========== Макросом генерируем From для всех вариантов, кроме FileSystem (требует контекста) ==========
+impl_from!(ValidationError, Validation);
+impl_from!(SecurityError, Security);
+impl_from!(AnalysisError, Analysis);
+impl_from!(ConfigurationError, Configuration);
+impl_from!(TrainingError, Training);
+impl_from!(NetworkError, Network);
+impl_from!(OllamaFsError, OllamaFs);
 
-// Наше решение: Создаем отдельные типы ошибок для:
-// 1. FileSystemError - общие операции с файловой системой
-// 2. OllamaFsError - специфичные для Ollama операции
-// 3. IoError оставляем для случаев, когда действительно нужна общая IO ошибка
-//    без дополнительного контекста (редкие случаи)
-
-// Это дает:
-// 1. Лучшую типизацию и обработку ошибок
-// 2. Более информативные сообщения об ошибках
-// 3. Возможность точного матчинга в коде потребителя
-// 4. Сохранение обратной совместимости через From преобразования
-impl From<std::io::Error> for DomainError {
-    fn from(error: std::io::Error) -> Self {
-        use std::io::ErrorKind;
-
-        let (error_type, context) = match error.kind() {
-            ErrorKind::NotFound => (
-                FileSystemErrorType::FileNotFound,
-                "File or directory not found",
-            ),
-            ErrorKind::PermissionDenied => {
-                (FileSystemErrorType::PermissionDenied, "Permission denied")
-            }
-            ErrorKind::AlreadyExists => (FileSystemErrorType::FileExists, "File already exists"),
-            ErrorKind::StorageFull => (FileSystemErrorType::DiskFull, "Disk is full"),
-            ErrorKind::InvalidInput => (FileSystemErrorType::InvalidPath, "Invalid path or input"),
-            _ => (
-                FileSystemErrorType::FileNotFound, // fallback
-                "Unknown IO error",
-            ),
-        };
-
-        DomainError::FileSystem(FileSystemError {
-            error_type,
-            path: "unknown".to_string(),
-            operation: IoOperation::Other("TO DO defined".to_string()),
-            context: context.to_string(),
-            detailed_message: Some(error.to_string()),
-        })
-    }
-}
-
-// Zero-cost преобразования между ошибками
-
-/// Преобразование ValidationError в DomainError без аллокаций
-impl From<ValidationError> for DomainError {
-    fn from(error: ValidationError) -> Self {
-        DomainError::Validation(error)
-    }
-}
-
-/// Преобразование SecurityError в DomainError без аллокаций
-impl From<SecurityError> for DomainError {
-    fn from(error: SecurityError) -> Self {
-        DomainError::Security(error)
-    }
-}
-
-/// Преобразование FileSystemerror
+// Для FileSystemError оставляем явный From (но он будет просто обёрткой)
 impl From<FileSystemError> for DomainError {
-    fn from(error: FileSystemError) -> Self {
-        DomainError::FileSystem(error)
+    fn from(err: FileSystemError) -> Self {
+        DomainError::FileSystem(err)
     }
 }
 
-///Преодразование OllamaFsError
-impl From<OllamaFsError> for DomainError {
-    fn from(error: OllamaFsError) -> Self {
-        DomainError::OllamaFs(error)
+// ========== Контекстное преобразование std::io::Error – теперь явное ==========
+// Общий From удалён. Вместо этого предоставляем конструктор для FileSystemError:
+impl FileSystemError {
+    /// Создаёт ошибку файловой системы из std::io::Error с контекстом.
+    pub fn from_io(
+        io_err: io::Error,
+        path: impl Into<String>,
+        operation: IoOperation,
+        context: impl Into<String>,
+    ) -> Self {
+        let error_type = match io_err.kind() {
+            io::ErrorKind::NotFound => FileSystemErrorType::FileNotFound,
+            io::ErrorKind::PermissionDenied => FileSystemErrorType::PermissionDenied,
+            io::ErrorKind::AlreadyExists => FileSystemErrorType::FileExists,
+            io::ErrorKind::StorageFull => FileSystemErrorType::DiskFull,
+            io::ErrorKind::InvalidInput => FileSystemErrorType::InvalidPath,
+            _ => FileSystemErrorType::Other,
+        };
+        FileSystemError {
+            error_type,
+            path: path.into(),
+            operation,
+            context: context.into(),
+            detailed_message: Some(io_err.to_string()),
+        }
     }
 }
-
 // ======= Обратная совместимость для кода, использующего старый IoError =======
 // Удаляем структуру IoError, но для предотвращения поломок оставляем type alias (deprecated)
 #[deprecated(note = "Use FileSystemError instead")]
