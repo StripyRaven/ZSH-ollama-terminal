@@ -1,4 +1,3 @@
-// zsh-ollama-terminal/crates/check-milestones/src/progress_tracker.rs
 //! # Progress Tracker Module
 //!
 //! Отслеживание прогресса по всем вехам и генерация комплексных отчетов.
@@ -55,141 +54,82 @@ use crate::quality_gates::QualityResult;
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Milestone {
     /// Foundation Complete - Базовая инфраструктура и основные типы
-    ///
-    /// Включает реализацию core types, traits, error system,
-    /// serialization/deserialization и базовую документацию.
     Foundation,
-
     /// Infrastructure Ready - Безопасность, клиент и платформенные абстракции
-    ///
-    /// Включает security validator, Ollama client, safe file operations,
-    /// platform abstractions и performance benchmarks.
     Infrastructure,
-
     /// AI Core Functional - Анализ команд и AI возможности
-    ///
-    /// Включает command analysis pipeline, hallucination detection,
-    /// training engine, performance targets и cache system.
     AICore,
-
     /// Web Interface Live - Веб-сервер и пользовательский интерфейс
-    ///
-    /// Включает Tera templates, HTMX interactions, typed HTTP responses,
-    /// reusable components и web server performance.
     WebInterface,
-
     /// Integration Complete - Системная интеграция и CLI
-    ///
-    /// Включает daemon operation, CLI commands, shell integration,
-    /// IPC communication и health monitoring.
     Integration,
-
     /// Production Ready - Готовность к продакшену
-    ///
-    /// Включает comprehensive testing, performance benchmarks,
-    /// security audits, documentation и cross-platform testing.
     Production,
 }
 
 /// Статус выполнения вехи
-///
-/// Определяет текущее состояние вехи в процессе разработки.
-/// Статусы используются для отслеживания прогресса и принятия решений
-/// о переходе к следующим этапам разработки.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MilestoneStatus {
     /// Веха еще не начата - планирование или ожидание зависимостей
     NotStarted,
-
     /// Веха в процессе выполнения - активная разработка
     InProgress,
-
     /// Веха завершена с результатами проверки качества
     Completed(QualityResult),
-
     /// Веха заблокирована с указанием причины блокировки
     Blocked(String),
-
     /// Веха пропущена с указанием причины пропуска
     Skipped(String),
 }
 
 /// Детальная информация о прогрессе конкретной вехи
-///
-/// Содержит всю необходимую информацию для отслеживания состояния вехи,
-/// включая требования, заметки, даты и результаты проверок.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MilestoneProgress {
     /// Текущий статус выполнения вехи
     pub status: MilestoneStatus,
-
     /// Временная метка последней проверки статуса вехи
     pub last_checked: DateTime<Utc>,
-
     /// Список требований, которые должны быть выполнены для завершения вехи
     pub requirements: Vec<String>,
-
     /// Дополнительные заметки или комментарии по вехе
     pub notes: Option<String>,
-
     /// Целевая дата завершения вехи (опционально)
     pub target_date: Option<DateTime<Utc>>,
 }
 
 /// Комплексный отчет о прогрессе всех вех проекта
-///
-/// Агрегирует информацию о всех вехах и предоставляет сводные метрики
-/// для быстрой оценки общего состояния проекта.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProgressReport {
     /// Коллекция всех вех с их текущим прогрессом
     pub milestones: HashMap<Milestone, MilestoneProgress>,
-
     /// Временная метка генерации отчета
     pub generated_at: DateTime<Utc>,
-
     /// Общий прогресс проекта в процентах (0-100)
-    /// Рассчитывается на основе количества завершенных вех
     pub overall_progress: f32,
-
     /// Сводная статистика по статусам вех
     pub summary: ProgressSummary,
 }
 
 /// Сводная статистика для отчетов о прогрессе
-///
-/// Предоставляет количественные метрики о распределении вех
-/// по различным статусам выполнения.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProgressSummary {
     /// Общее количество вех в проекте
     pub total_milestones: usize,
-
     /// Количество завершенных вех
     pub completed_milestones: usize,
-
     /// Количество вех в процессе выполнения
     pub in_progress_milestones: usize,
-
     /// Количество вех, которые еще не начаты
     pub not_started_milestones: usize,
-
     /// Количество заблокированных вех
     pub blocked_milestones: usize,
 }
 
 /// Основной трекер для мониторинга прогресса по всем вехам
-///
-/// Центральный компонент системы отслеживания прогресса, который:
-/// - Хранит текущее состояние всех вех
-/// - Предоставляет методы для обновления статусов
-/// - Генерирует комплексные отчеты
-/// - Сохраняет историю изменений
 #[derive(Debug, Clone)]
 pub struct ProgressTracker {
     /// Текущее состояние всех вех проекта
     milestones: HashMap<Milestone, MilestoneProgress>,
-
     /// История снимков прогресса для анализа трендов
     history: Vec<ProgressReport>,
 }
@@ -260,6 +200,7 @@ impl Milestone {
     /// assert_eq!(all_milestones.len(), 6);
     /// assert!(matches!(all_milestones[0], Milestone::Foundation));
     /// ```
+    #[must_use]
     pub fn all() -> Vec<Milestone> {
         vec![
             Milestone::Foundation,
@@ -367,14 +308,11 @@ impl MilestoneStatus {
     ///
     /// ```rust
     /// use check_milestones::MilestoneStatus;
+    /// use check_milestones::quality_gates::QualityResult;
+    /// use std::time::Duration;
     ///
-    /// let status = MilestoneStatus::Completed(
-    ///     check_milestones::QualityResult::success(
-    ///         "Test".to_string(),
-    ///         vec![],
-    ///         std::time::Duration::from_secs(1)
-    ///     )
-    /// );
+    /// let result = QualityResult::success("Test".to_string(), vec![], Duration::from_secs(1));
+    /// let status = MilestoneStatus::Completed(result);
     /// assert_eq!(status.emoji(), "✅");
     /// ```
     pub fn emoji(&self) -> &'static str {
@@ -393,7 +331,7 @@ impl MilestoneStatus {
 // =============================================================================
 
 impl ProgressTracker {
-    /// Создает новый трекер прогресса со всеми вехами в начальном состоянии
+    /// Создаёт новый трекер прогресса со всеми вехами в начальном состоянии
     ///
     /// Инициализирует все вехи проекта со статусом `NotStarted`
     /// и базовыми требованиями для каждой вехи.
@@ -407,6 +345,7 @@ impl ProgressTracker {
     /// let report = tracker.generate_report();
     /// assert_eq!(report.overall_progress, 0.0);
     /// ```
+    #[must_use]
     pub fn new() -> Self {
         let mut milestones = HashMap::new();
 
@@ -432,7 +371,7 @@ impl ProgressTracker {
 
     /// Обновляет статус вехи на основе результатов проверки качества
     ///
-    /// Если проверка качества пройдена успешно, веха отмечается как завершенная.
+    /// Если проверка качества пройдена успешно, веха отмечается как завершённая.
     /// В противном случае статус меняется на "In Progress".
     ///
     /// # Аргументы
@@ -580,6 +519,7 @@ impl ProgressTracker {
     /// let report = tracker.generate_report();
     /// println!("Overall progress: {:.1}%", report.overall_progress);
     /// ```
+    #[must_use]
     pub fn generate_report(&self) -> ProgressReport {
         let mut report = ProgressReport {
             milestones: self.milestones.clone(),
@@ -937,6 +877,8 @@ impl ProgressReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::quality_gates::{CriterionResult, QualityResult};
+    use std::time::Duration;
 
     /// Тестирует создание трекера прогресса
     #[test]
@@ -1025,11 +967,7 @@ mod tests {
 
     /// Тестирует обновление статуса вехи
     #[test]
-    #[allow(unused_imports)] // в тесте ругалось на QualitySummary
     fn test_update_milestone() {
-        use crate::quality_gates::{CriterionResult, QualityResult, QualitySummary};
-        use std::time::Duration;
-
         let mut tracker = ProgressTracker::new();
 
         let quality_result = QualityResult::success(
