@@ -1,6 +1,7 @@
 //! crates/shared/src/serialization.rs
 //! # Comprehensive Serialization System
 //! Полная система сериализации с валидацией и версионированием.
+//! ver 1.0.1
 
 use crate::SystemInfo;
 use crate::{states, Command};

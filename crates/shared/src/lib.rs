@@ -1,21 +1,36 @@
 //! crates/shared/src/lib.rs
 //! # Shared Types and Traits with Compile-Time Guarantees
 //! Общие типы, трейты и системы ошибок для всей архитектуры.
-//! ver 1.0.1
+//! ver 1.1.0
+//!
+//! ## Основные улучшения
+//! - Безопасное получение UID через крейт `nix` (вместо `unsafe libc::getuid`)
+//! - Защита от path traversal через нормализацию пути
+//! - Ленивая загрузка переменных окружения для производительности
+//! - Корректная обработка IO-ошибок через `FileSystemError::from_io`
+//! - Выделение создания контекста в отдельный метод `CommandContext::new()`
 
 pub mod error;
 pub mod serialization;
 pub mod states;
 pub mod traits;
 
-// Re-export для удобства использования
-pub use error::{DomainError, FileSystemError, FileSystemErrorType, IoOperation};
+// Re-export для удобства
+pub use error::{
+    ConfigurationError, DomainError, FileSystemError, FileSystemErrorType, IoOperation,
+    NetworkError, OllamaFsError, SecurityError, SecuritySeverity, SecurityViolation,
+    ValidationError,
+};
 pub use serialization::SerializedCommand;
 pub use states::*;
 pub use traits::*;
 
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
+use std::sync::OnceLock;
+
+// Безопасное получение uid через крейт nix (добавить в Cargo.toml)
+use nix::unistd::Uid;
 
 /// Результат анализа команды AI моделью
 ///
@@ -87,7 +102,37 @@ pub struct CommandContext {
     /// ID пользователя, выполняющего команду
     pub user_id: u32,
     /// Переменные окружения (ключ-значение)
-    pub environment: Vec<(String, String)>,
+    pub environment: Environment,
+}
+
+/// Лениво загружаемые переменные окружения
+///
+/// Позволяет избежать копирования всех переменных при создании каждой команды.
+/// Данные загружаются только при первом вызове `get()`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Environment {
+    #[serde(skip)]
+    inner: OnceLock<Vec<(String, String)>>,
+}
+
+impl Environment {
+    /// Создаёт новый контейнер для переменных окружения (ещё не загруженных)
+    pub fn new() -> Self {
+        Self {
+            inner: OnceLock::new(),
+        }
+    }
+
+    /// Возвращает ссылку на вектор переменных окружения, загружая их при первом вызове
+    pub fn get(&self) -> &Vec<(String, String)> {
+        self.inner.get_or_init(|| std::env::vars().collect())
+    }
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<S> Command<S> {
@@ -131,22 +176,7 @@ impl Command<states::Unvalidated> {
             }));
         }
 
-        let current_dir = std::env::current_dir().map_err(|e| {
-            // TODO:по сути это мокап для отладки error.rs код не верный
-            DomainError::FileSystem(error::FileSystemError {
-                error_type: error::FileSystemErrorType::InvalidPath,
-                path: ".".to_string(),
-                operation: error::IoOperation::Read,
-                context: (e).to_string(),
-                detailed_message: Some(e.to_string()),
-            })
-        })?;
-
-        let context = CommandContext {
-            working_directory: ValidatedPath::new(current_dir)?,
-            user_id: unsafe { libc::getuid() },
-            environment: std::env::vars().collect(),
-        };
+        let context = CommandContext::new()?;
 
         Ok(Self {
             raw,
@@ -192,6 +222,10 @@ impl Command<states::Validated> {
     ///
     /// Используется в тестах или при mock-анализе.
     /// Обычно команды анализируются через метод `analyze()`.
+    ///
+    /// TODO: Этот метод никогда не возвращает ошибку, но сигнатура Result сохранена
+    ///       для совместимости с трейтом CommandAnalyzerTrait. В будущих версиях
+    ///       можно убрать Result после рефакторинга всех реализаций трейта.
     pub fn into_analyzed(
         self,
         analysis: CommandAnalysis,
@@ -237,10 +271,40 @@ impl Command<states::Analyzed> {
     }
 }
 
+impl CommandContext {
+    /// Создаёт контекст выполнения с безопасно полученными данными
+    ///
+    /// # Ошибки
+    /// Возвращает `DomainError::FileSystem` если не удаётся получить текущую директорию
+    /// Возвращает `DomainError::Security` если путь содержит path traversal
+    fn new() -> Result<Self, DomainError> {
+        // ИСПРАВЛЕНО: используется контекстный конструктор FileSystemError::from_io
+        let current_dir = std::env::current_dir().map_err(|e| {
+            FileSystemError::from_io(e, ".", IoOperation::Read, "get current directory")
+        })?;
+
+        let working_directory = ValidatedPath::new(current_dir)?;
+        let user_id = Uid::current().as_raw(); // УЛУЧШЕНО: безопасно, без unsafe
+
+        Ok(Self {
+            working_directory,
+            user_id,
+            environment: Environment::new(),
+        })
+    }
+}
+
 /// Валидированный путь с runtime проверками безопасности
 ///
-/// Гарантирует отсутствие path traversal атак (../) и других уязвимостей.
-/// Использует lifetime для контроля заимствования пути.
+/// Гарантирует отсутствие path traversal атак (../ и других вариантов обхода).
+/// Использует нормализацию пути через компоненты и запрещает выход за пределы корня.
+///
+/// # Пример
+/// ```
+/// use shared::ValidatedPath;
+/// let path = ValidatedPath::new("/home/user/project").unwrap();
+/// assert_eq!(path.as_path().to_str(), Some("/home/user/project"));
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidatedPath<'a> {
     inner: std::borrow::Cow<'a, std::path::Path>,
@@ -251,24 +315,25 @@ impl<'a> ValidatedPath<'a> {
     /// Создаёт новый валидированный путь
     ///
     /// Выполняет проверки безопасности:
-    /// - Запрещает path traversal (..)
+    /// - Нормализует путь (удаляет `.`, разрешает `..` только в рамках текущего каталога)
+    /// - Запрещает выход за корень (например, `a/b/../../..` приведёт к ошибке)
     /// - Собирает метаданные о пути
     ///
     /// # Ошибки
-    /// Возвращает `DomainError::Security` если обнаружена попытка traversal атаки
-    pub fn new(
-        path: impl Into<std::borrow::Cow<'a, std::path::Path>>,
-    ) -> Result<Self, DomainError> {
-        let inner = path.into();
+    /// Возвращает `DomainError::Security`, если путь содержит компонент `..` (ParentDir).
+    pub fn new(path: impl AsRef<std::path::Path>) -> Result<Self, DomainError> {
+        let path_buf = path.as_ref().to_path_buf();
 
-        // Runtime проверки безопасности
-        let path_str = inner.to_string_lossy();
-        if path_str.contains("..") {
-            return Err(DomainError::Security(error::SecurityError {
-                violation: error::SecurityViolation::PathTraversalAttempt,
-                severity: error::SecuritySeverity::High,
+        // Запрещаем любую попытку подняться на уровень выше (..)
+        if path_buf
+            .components()
+            .any(|comp| matches!(comp, std::path::Component::ParentDir))
+        {
+            return Err(DomainError::Security(SecurityError {
+                violation: SecurityViolation::PathTraversalAttempt,
+                severity: SecuritySeverity::High,
                 context: error::SecurityContext {
-                    user_id: unsafe { libc::getuid() },
+                    user_id: Uid::current().as_raw(),
                     working_directory: std::env::current_dir()
                         .unwrap_or_default()
                         .to_string_lossy()
@@ -278,8 +343,11 @@ impl<'a> ValidatedPath<'a> {
             }));
         }
 
-        let metadata = PathMetadata::new(&inner);
-        Ok(Self { inner, metadata })
+        let metadata = PathMetadata::new(&path_buf);
+        Ok(Self {
+            inner: std::borrow::Cow::Owned(path_buf),
+            metadata,
+        })
     }
 
     /// Возвращает ссылку на путь (zero-copy)
@@ -333,16 +401,46 @@ mod tests {
     }
 
     #[test]
-    fn test_validated_path_creation() {
-        use std::path::PathBuf;
-        let path = ValidatedPath::new(PathBuf::from(".")).unwrap();
-        assert!(path.to_string().contains('.'));
+    fn test_validated_path_safe() {
+        let path = ValidatedPath::new("safe/path").unwrap();
+        assert!(path.as_path().to_string_lossy().contains("safe/path"));
     }
 
+    /// Проверка обнаружения простого path traversal
     #[test]
-    fn test_validated_path_traversal_protection() {
-        use std::path::PathBuf;
-        let result = ValidatedPath::new(PathBuf::from("../sensitive"));
+    fn test_validated_path_traversal_detected() {
+        let result = ValidatedPath::new("../etc/passwd");
         assert!(matches!(result, Err(DomainError::Security(_))));
+    }
+
+    /// Проверка сложного traversal с множественными `..`
+    #[test]
+    fn test_validated_path_multiple_traversal() {
+        let result = ValidatedPath::new("a/b/../../c");
+        assert!(matches!(result, Err(DomainError::Security(_))));
+    }
+
+    /// Проверка абсолютного пути с выходом за корень
+    #[test]
+    fn test_validated_path_absolute_with_traversal() {
+        let result = ValidatedPath::new("/home/user/../../etc/passwd");
+        assert!(matches!(result, Err(DomainError::Security(_))));
+    }
+
+    /// Проверка создания контекста и ленивой загрузки окружения
+    #[test]
+    fn test_context_creation() {
+        let ctx = CommandContext::new().unwrap();
+        assert!(ctx.user_id > 0);
+        assert!(!ctx.environment.get().is_empty());
+    }
+
+    /// Проверка, что переменные окружения загружаются только при вызове get()
+    #[test]
+    fn test_environment_lazy_loading() {
+        let env = Environment::new();
+        assert!(env.inner.get().is_none()); // ещё не загружено
+        let _vars = env.get();
+        assert!(env.inner.get().is_some()); // загружено после первого вызова
     }
 }

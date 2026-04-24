@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 chrono = { workspace = true, features = ["serde"] }
+nix = { version = "0.29", features = ["user"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = "1.0"
 sys-info = "0.9"
