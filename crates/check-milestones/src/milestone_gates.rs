@@ -1,4 +1,3 @@
-// zsh-ollama-terminal/crates/check-milestones/src/milestone_gates.rs
 //! # Milestone Gates Definitions
 //!
 //! Предопределенные Quality Gates для каждой вехи проекта zsh-ollama-terminal.
@@ -79,6 +78,7 @@ impl MilestoneGates {
     /// let gate = MilestoneGates::milestone_1();
     /// let result = gate.check();
     /// ```
+    #[must_use]
     pub fn milestone_1() -> QualityGate {
         QualityGate::new("Milestone 1: Foundation Complete")
             .add_criterion(
@@ -146,6 +146,7 @@ impl MilestoneGates {
     /// let gate = MilestoneGates::milestone_2();
     /// let result = gate.check();
     /// ```
+    #[must_use]
     pub fn milestone_2() -> QualityGate {
         QualityGate::new("Milestone 2: Infrastructure Ready")
             .add_criterion(
@@ -214,6 +215,7 @@ impl MilestoneGates {
     /// let gate = MilestoneGates::milestone_3();
     /// let result = gate.check();
     /// ```
+    #[must_use]
     pub fn milestone_3() -> QualityGate {
         QualityGate::new("Milestone 3: AI Core Functional")
             .add_criterion(
@@ -272,6 +274,7 @@ impl MilestoneGates {
     /// let gate = MilestoneGates::milestone_4();
     /// let result = gate.check();
     /// ```
+    #[must_use]
     pub fn milestone_4() -> QualityGate {
         QualityGate::new("Milestone 4: Web Interface Live")
             .add_criterion(
@@ -329,6 +332,7 @@ impl MilestoneGates {
     /// let gate = MilestoneGates::milestone_5();
     /// let result = gate.check();
     /// ```
+    #[must_use]
     pub fn milestone_5() -> QualityGate {
         QualityGate::new("Milestone 5: Integration Complete")
             .add_criterion(
@@ -387,6 +391,7 @@ impl MilestoneGates {
     /// let gate = MilestoneGates::milestone_6();
     /// let result = gate.check();
     /// ```
+    #[must_use]
     pub fn milestone_6() -> QualityGate {
         QualityGate::new("Milestone 6: Production Ready")
             .add_criterion(
@@ -448,6 +453,7 @@ impl MilestoneGates {
     ///     println!("Result: {}", if result.passed { "PASSED" } else { "FAILED" });
     /// }
     /// ```
+    #[must_use]
     pub fn all_milestones() -> Vec<(u8, QualityGate)> {
         vec![
             (1, Self::milestone_1()),
@@ -468,7 +474,6 @@ impl MilestoneGates {
 mod tests {
     use super::*;
 
-    /// Тестирует создание Quality Gate для вехи 1
     #[test]
     fn test_milestone_1_creation() {
         let milestone_1 = MilestoneGates::milestone_1();
@@ -477,7 +482,6 @@ mod tests {
         assert!(milestone_1.strict_mode);
     }
 
-    /// Тестирует создание Quality Gate для вехи 2
     #[test]
     fn test_milestone_2_creation() {
         let milestone_2 = MilestoneGates::milestone_2();
@@ -485,7 +489,6 @@ mod tests {
         assert!(!milestone_2.criteria.is_empty());
     }
 
-    /// Тестирует создание Quality Gate для вехи 3
     #[test]
     fn test_milestone_3_creation() {
         let milestone_3 = MilestoneGates::milestone_3();
@@ -493,7 +496,6 @@ mod tests {
         assert!(!milestone_3.criteria.is_empty());
     }
 
-    /// Тестирует создание Quality Gate для вехи 4
     #[test]
     fn test_milestone_4_creation() {
         let milestone_4 = MilestoneGates::milestone_4();
@@ -501,7 +503,6 @@ mod tests {
         assert!(!milestone_4.criteria.is_empty());
     }
 
-    /// Тестирует создание Quality Gate для вехи 5
     #[test]
     fn test_milestone_5_creation() {
         let milestone_5 = MilestoneGates::milestone_5();
@@ -509,7 +510,6 @@ mod tests {
         assert!(!milestone_5.criteria.is_empty());
     }
 
-    /// Тестирует создание Quality Gate для вехи 6
     #[test]
     fn test_milestone_6_creation() {
         let milestone_6 = MilestoneGates::milestone_6();
@@ -517,23 +517,18 @@ mod tests {
         assert!(!milestone_6.criteria.is_empty());
     }
 
-    /// Тестирует получение всех вех
     #[test]
     fn test_all_milestones() {
         let all_milestones = MilestoneGates::all_milestones();
         assert_eq!(all_milestones.len(), 6);
-
-        // Проверяем, что вехи идут в правильном порядке
         for (i, (number, _)) in all_milestones.iter().enumerate() {
             assert_eq!(*number, (i + 1) as u8);
         }
     }
 
-    /// Тестирует, что все критерии имеют описания
     #[test]
     fn test_all_criteria_have_descriptions() {
         let all_milestones = MilestoneGates::all_milestones();
-
         for (_, gate) in all_milestones {
             for criterion in &gate.criteria {
                 assert!(
