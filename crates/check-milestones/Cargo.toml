@@ -19,6 +19,7 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [dependencies]
+anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.0", features = ["derive"], optional = true }
 colored = "3.0"
