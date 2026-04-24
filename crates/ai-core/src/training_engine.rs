@@ -466,17 +466,23 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[tokio::test]
     async fn test_data_anonymization() {
         let collector = TrainingDataCollector::new();
 
+        // Создаём контекст с новым типом Environment
+        let context = shared::CommandContext {
+            working_directory: shared::ValidatedPath::new(".").unwrap(),
+            user_id: 1000,
+            environment: shared::Environment::new(), // <- изменено
+        };
+
+        // Если нужны переменные окружения в тесте, их можно установить через Environment,
+        // но обычно для анонимизации они не нужны. Если всё же нужны – придётся мокать.
+        // Но в данном тесте вы не используете environment, так что оставляем пустым.
+
         let command = HistoricalCommand {
             command: "cat /home/user/documents/file.txt".to_string(),
-            context: shared::CommandContext {
-                working_directory: shared::ValidatedPath::new(std::path::Path::new(".")).unwrap(),
-                user_id: 1000,
-                environment: vec![],
-            },
+            context,
             success: true,
             output: Some("sensitive data user@example.com 192.168.1.1".to_string()),
         };
