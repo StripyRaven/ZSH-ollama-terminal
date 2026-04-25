@@ -1,5 +1,3 @@
-//# src/lib.rs
-// **zsh-ollama-terminal/crates/check-milestones/src/lib.rs**
 //! # Check Milestones - Quality Gates System
 //!
 //! Автоматизированные проверки качества и отслеживание вех для проекта zsh-ollama-terminal.
@@ -22,6 +20,9 @@
 //! let mut tracker = ProgressTracker::new();
 //! let report = tracker.generate_report();
 //! ```
+//!
+//! ## Версия
+//! ver 1.1.0
 
 #![warn(missing_docs)]
 #![warn(rustdoc::missing_crate_level_docs)]
@@ -44,28 +45,3 @@ pub mod prelude {
         ProgressTracker, QualityGate, QualityResult,
     };
 }
-
-/// Типы ошибок для крейта check-milestones
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    /// Ошибка выполнения команды
-    #[error("Command execution failed: {command} - {error}")]
-    CommandExecution {
-        /// Команда, которая завершилась ошибкой
-        command: String,
-        /// Основная ошибка
-        error: String,
-    },
-
-    /// IO ошибка
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
-
-    /// Ошибка сериализации
-    #[error("Serialization error: {0}")]
-    Serialization(String),
-}
-
-/// Результирующий тип для крейта check-milestones
-pub type Result<T> = std::result::Result<T, Error>;
-
